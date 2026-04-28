@@ -1,0 +1,7 @@
+add_library(kkf_kokkos_hooks SHARED kokkos_hooks.cpp)
+
+target_compile_features(kkf_kokkos_hooks PRIVATE cxx_std_20)
+
+target_include_directories(kkf_kokkos_hooks PRIVATE "${PROJECT_SOURCE_DIR}/external/kokkos/core/src")
+
+set_target_properties(kkf_kokkos_hooks PROPERTIES OUTPUT_NAME kkf LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
