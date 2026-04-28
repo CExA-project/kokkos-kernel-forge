@@ -7,7 +7,6 @@ repos:
     - id: check-yaml
     - id: end-of-file-fixer
       exclude: '^tpls/'
-    - id: forbid-submodules
     - id: trailing-whitespace
       exclude: '^tpls/'
 
