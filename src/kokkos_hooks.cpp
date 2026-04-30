@@ -3,15 +3,17 @@
  *
  * This file is compiled as a shared library and loaded at runtime through
  * KOKKOS_TOOLS_LIBS. Kokkos discovers the exported kokkosp_* symbols and calls
- * them when kernels start/end and when data is allocated.
+ * them when kernels start/end and when data is allocated or deallocated.
  *
  * The hook keeps the output focused on application code by filtering internal
- * Kokkos labels. For user labels, it logs View allocations and the begin/end of
- * parallel_for, parallel_reduce, and parallel_scan kernels. End callbacks also
- * request a Kokkos fence.
+ * Kokkos labels. For user labels, it logs Kokkos data allocations and the
+ * begin/end of parallel_for, parallel_reduce, and parallel_scan kernels. End
+ * callbacks also request a Kokkos fence.
  */
 
 #include <impl/Kokkos_Profiling_C_Interface.h>
+
+#include "allocation_tracker.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -38,6 +40,8 @@ struct KernelState {
 
 std::unordered_map<std::uint64_t, KernelState> kernel_states;
 Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
+
+kkf::AllocationTracker allocation_tracker;
 
 std::string label_or_unknown(const char* label) {
   return label != nullptr ? label : "<unknown>";
@@ -81,6 +85,10 @@ void log_line(Args&&... args) {
   std::cerr << "[kokkos-hooks] ";
   (std::cerr << ... << args);
   std::cerr << '\n';
+}
+
+bool should_track_allocation(const char* label, const void* ptr) {
+  return ptr != nullptr && is_user_label(label);
 }
 
 void begin_kernel(const char* hook_name, const char* label,
@@ -163,10 +171,49 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_scan(
 extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
     const Kokkos_Profiling_SpaceHandle space, const char* label,
     const void* ptr, const std::uint64_t size) {
+  const std::string allocation_label = label_or_unknown(label);
+  const std::string allocation_space = space_name(space);
+
+  if (should_track_allocation(label, ptr)) {
+    allocation_tracker.record_allocation(allocation_label, allocation_space,
+                                         ptr, size);
+  }
+
   if (is_user_label(label)) {
-    log_line("kokkosp_allocate_data view_create label=\"",
-             label_or_unknown(label), "\" space=\"", space_name(space),
+    log_line("kokkosp_allocate_data allocation_create label=\"",
+             allocation_label, "\" space=\"", allocation_space, "\" ptr=", ptr,
+             " size=", size);
+  }
+}
+
+extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_deallocate_data(
+    const Kokkos_Profiling_SpaceHandle space, const char* label,
+    const void* ptr, const std::uint64_t size) {
+  const std::string deallocation_label = label_or_unknown(label);
+  const std::string deallocation_space = space_name(space);
+
+  if (ptr != nullptr) {
+    allocation_tracker.record_deallocation(deallocation_space, ptr);
+  }
+
+  if (is_user_label(label)) {
+    log_line("kokkosp_deallocate_data allocation_destroy label=\"",
+             deallocation_label, "\" space=\"", deallocation_space,
              "\" ptr=", ptr, " size=", size);
+  }
+}
+
+extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {
+  const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
+
+  log_line("kokkosp_finalize_library allocation_summary active_allocations=",
+           snapshot.allocations.size(),
+           " active_bytes=", snapshot.active_bytes);
+
+  for (const kkf::ActiveAllocation& allocation : snapshot.allocations) {
+    log_line("outstanding_allocation label=\"", allocation.record.label,
+             "\" space=\"", allocation.record.space, "\" ptr=", allocation.ptr,
+             " size=", allocation.record.size);
   }
 }
 
