@@ -43,6 +43,11 @@ Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
 kkf::AllocationTracker allocation_tracker;
 
+std::string tracked_kernel_label;
+
+constexpr std::string_view track_kernel_label_option =
+    "--kkf-track-kernel-label=";
+
 std::string label_or_unknown(const char* label) {
   return label != nullptr ? label : "<unknown>";
 }
@@ -87,25 +92,52 @@ void log_line(Args&&... args) {
   std::cerr << '\n';
 }
 
+bool should_snapshot_views_for_label(std::string_view label) {
+  return !tracked_kernel_label.empty() && label == tracked_kernel_label;
+}
+
+void log_view_tracking_snapshot(const char* phase, const std::string& label,
+                                const std::uint64_t kernel_id) {
+  const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
+
+  log_line("view_tracking_snapshot phase=", phase, " kernel_label=\"", label,
+           "\" id=", kernel_id,
+           " active_allocations=", snapshot.allocations.size(),
+           " active_bytes=", snapshot.active_bytes);
+
+  for (const kkf::ActiveAllocation& allocation : snapshot.allocations) {
+    log_line("tracked_view phase=", phase, " kernel_label=\"", label,
+             "\" allocation_label=\"", allocation.record.label, "\" space=\"",
+             allocation.record.space, "\" ptr=", allocation.ptr,
+             " size=", allocation.record.size);
+  }
+}
+
 bool should_track_allocation(const char* label, const void* ptr) {
   return ptr != nullptr && is_user_label(label);
 }
 
 void begin_kernel(const char* hook_name, const char* label,
                   const std::uint32_t device_id, std::uint64_t* kernel_id) {
-  const std::uint64_t id = next_kernel_id.fetch_add(1);
+  const std::uint64_t id         = next_kernel_id.fetch_add(1);
+  const std::string kernel_label = label_or_unknown(label);
+
   if (kernel_id != nullptr) {
     *kernel_id = id;
   }
 
   {
     std::lock_guard<std::mutex> lock(state_mutex);
-    kernel_states[id] = {label_or_unknown(label), device_id};
+    kernel_states[id] = {kernel_label, device_id};
+  }
+
+  if (should_snapshot_views_for_label(kernel_label)) {
+    log_view_tracking_snapshot("begin", kernel_label, id);
   }
 
   if (is_user_label(label)) {
-    log_line(hook_name, " label=\"", label_or_unknown(label),
-             "\" device=", device_id, " id=", id);
+    log_line(hook_name, " label=\"", kernel_label, "\" device=", device_id,
+             " id=", id);
   }
 }
 
@@ -126,6 +158,10 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
 
   if (fence != nullptr) {
     fence(device_id);
+  }
+
+  if (should_snapshot_views_for_label(label)) {
+    log_view_tracking_snapshot("end", label, kernel_id);
   }
 
   if (is_user_label(label.c_str())) {
@@ -166,6 +202,17 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_scan(
 extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_scan(
     const std::uint64_t kernel_id) {
   end_kernel("kokkosp_end_parallel_scan", kernel_id);
+}
+
+extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
+                                                       char** argv) {
+  for (int i = 0; i < argc; ++i) {
+    const std::string_view argument = argv[i] != nullptr ? argv[i] : "";
+    if (starts_with(argument, track_kernel_label_option)) {
+      tracked_kernel_label =
+          std::string(argument.substr(track_kernel_label_option.size()));
+    }
+  }
 }
 
 extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
