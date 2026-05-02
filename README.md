@@ -10,7 +10,7 @@ cmake -S . -B build/serial -DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_SERIAL=ON
 cmake --build build/serial -j
 ```
 
-## Targeted view tracking
+## Targeted view dumps
 
 OpenMP backend:
 
@@ -18,7 +18,7 @@ OpenMP backend:
 cmake -S . -B build/openmp -DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_SERIAL=OFF -DKokkos_ENABLE_OPENMP=ON
 cmake --build build/openmp -j
 KOKKOS_TOOLS_LIBS=$PWD/build/openmp/libkkf.so \
-  KOKKOS_TOOLS_ARGS="--kkf-track-kernel-label=sum_values" \
+  KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=sum_values" \
   ./build/openmp/examples/kokkos_kernel_example
 ```
 
@@ -28,6 +28,6 @@ CUDA backend:
 cmake -S . -B build/cuda -DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_CUDA=ON
 cmake --build build/cuda -j
 KOKKOS_TOOLS_LIBS=$PWD/build/cuda/libkkf.so \
-  KOKKOS_TOOLS_ARGS="--kkf-track-kernel-label=sum_values" \
+  KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=sum_values" \
   ./build/cuda/examples/kokkos_kernel_example
 ```

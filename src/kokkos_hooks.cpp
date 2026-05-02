@@ -6,14 +6,15 @@
  * them when kernels start/end and when data is allocated or deallocated.
  *
  * The hook keeps the output focused on application code by filtering internal
- * Kokkos labels. For user labels, it logs Kokkos data allocations and the
- * begin/end of parallel_for, parallel_reduce, and parallel_scan kernels. End
- * callbacks also request a Kokkos fence.
+ * Kokkos labels. For the selected kernel label, it dumps active Kokkos data
+ * allocations to HDF5 before and after the kernel. End callbacks also request a
+ * Kokkos fence.
  */
 
 #include <impl/Kokkos_Profiling_C_Interface.h>
 
 #include "allocation_tracker.hpp"
+#include "view_dump.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -43,10 +44,10 @@ Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
 kkf::AllocationTracker allocation_tracker;
 
-std::string tracked_kernel_label;
+std::string dump_kernel_label;
 
-constexpr std::string_view track_kernel_label_option =
-    "--kkf-track-kernel-label=";
+constexpr std::string_view dump_kernel_label_option =
+    "--kkf-dump-kernel-label=";
 
 std::string label_or_unknown(const char* label) {
   return label != nullptr ? label : "<unknown>";
@@ -92,25 +93,25 @@ void log_line(Args&&... args) {
   std::cerr << '\n';
 }
 
-bool should_snapshot_views_for_label(std::string_view label) {
-  return !tracked_kernel_label.empty() && label == tracked_kernel_label;
+bool should_dump_views_for_label(std::string_view label) {
+  return !dump_kernel_label.empty() && label == dump_kernel_label;
 }
 
-void log_view_tracking_snapshot(const char* phase, const std::string& label,
-                                const std::uint64_t kernel_id) {
+void dump_views(const char* phase, const std::string& label,
+                std::uint64_t kernel_id) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-
-  log_line("view_tracking_snapshot phase=", phase, " kernel_label=\"", label,
-           "\" id=", kernel_id,
-           " active_allocations=", snapshot.allocations.size(),
-           " active_bytes=", snapshot.active_bytes);
-
-  for (const kkf::ActiveAllocation& allocation : snapshot.allocations) {
-    log_line("tracked_view phase=", phase, " kernel_label=\"", label,
-             "\" allocation_label=\"", allocation.record.label, "\" space=\"",
-             allocation.record.space, "\" ptr=", allocation.ptr,
-             " size=", allocation.record.size);
+  const kkf::ViewDumpResult result =
+      kkf::dump_view_snapshot(snapshot, phase, label, kernel_id);
+  if (!result.ok) {
+    log_line("view_dump_failed phase=", phase, " kernel_label=\"", label,
+             "\" id=", kernel_id, " file=\"", result.filename, "\"");
+    return;
   }
+
+  log_line("view_dump phase=", phase, " kernel_label=\"", label,
+           "\" id=", kernel_id, " file=\"", result.filename,
+           "\" active_allocations=", snapshot.allocations.size(),
+           " active_bytes=", snapshot.active_bytes);
 }
 
 bool should_track_allocation(const char* label, const void* ptr) {
@@ -131,8 +132,16 @@ void begin_kernel(const char* hook_name, const char* label,
     kernel_states[id] = {kernel_label, device_id};
   }
 
-  if (should_snapshot_views_for_label(kernel_label)) {
-    log_view_tracking_snapshot("begin", kernel_label, id);
+  if (should_dump_views_for_label(kernel_label)) {
+    Kokkos_Tools_toolInvokedFenceFunction fence = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(state_mutex);
+      fence = tool_fence;
+    }
+    if (fence != nullptr) {
+      fence(device_id);
+    }
+    dump_views("in", kernel_label, id);
   }
 
   if (is_user_label(label)) {
@@ -160,8 +169,8 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
     fence(device_id);
   }
 
-  if (should_snapshot_views_for_label(label)) {
-    log_view_tracking_snapshot("end", label, kernel_id);
+  if (should_dump_views_for_label(label)) {
+    dump_views("out", label, kernel_id);
   }
 
   if (is_user_label(label.c_str())) {
@@ -208,9 +217,9 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
                                                        char** argv) {
   for (int i = 0; i < argc; ++i) {
     const std::string_view argument = argv[i] != nullptr ? argv[i] : "";
-    if (starts_with(argument, track_kernel_label_option)) {
-      tracked_kernel_label =
-          std::string(argument.substr(track_kernel_label_option.size()));
+    if (starts_with(argument, dump_kernel_label_option)) {
+      dump_kernel_label =
+          std::string(argument.substr(dump_kernel_label_option.size()));
     }
   }
 }
