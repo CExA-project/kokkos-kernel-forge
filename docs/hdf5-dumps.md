@@ -33,5 +33,5 @@ label        # Kokkos allocation label
 space        # Kokkos memory space name reported by the profiling hook
 ptr          # allocation pointer value, stored as text
 size         # allocation size in bytes
-bytes_dumped # boolean flag: 1 means a `bytes` dataset was written, 0 means it was skipped
+bytes_dumped
 ```

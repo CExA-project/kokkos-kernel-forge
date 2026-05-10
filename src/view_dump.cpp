@@ -1,5 +1,7 @@
 #include "view_dump.hpp"
 
+#include "memory_copy.hpp"
+
 #include <hdf5.h>
 
 #include <cctype>
@@ -7,6 +9,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace kkf {
 namespace {
@@ -44,12 +47,6 @@ std::string dump_filename(std::string_view label, std::uint64_t kernel_id,
                           std::string_view phase) {
   return "kkf_" + sanitize_name(label) + "_" + std::to_string(kernel_id) + "_" +
          std::string(phase) + ".h5";
-}
-
-bool is_host_accessible_space(const std::string& space) {
-  return space == "Host" || space == "CudaHostPinned" || space == "CudaUVM" ||
-         space == "HIPHostPinned" || space == "HIPManaged" ||
-         space == "SYCLHostUSM" || space == "SYCLSharedUSM";
 }
 
 void write_string_attribute(hid_t object, const char* name,
@@ -130,16 +127,16 @@ void write_allocation_group(hid_t views_group,
   write_string_attribute(group, "ptr", pointer_to_string(allocation.ptr));
   write_uint64_attribute(group, "size", allocation.record.size);
 
-  const bool can_dump_bytes = is_host_accessible_space(allocation.record.space);
-  write_int_attribute(group, "bytes_dumped", can_dump_bytes ? 1 : 0);
-  if (!can_dump_bytes) {
-    write_string_attribute(group, "skip_reason",
-                           "memory space is not host-accessible");
+  std::vector<unsigned char> bytes;
+  const std::string skip_reason = copy_allocation_bytes(allocation, bytes);
+  write_int_attribute(group, "bytes_dumped", skip_reason.empty() ? 1 : 0);
+  if (!skip_reason.empty()) {
+    write_string_attribute(group, "skip_reason", skip_reason);
     H5Gclose(group);
     return;
   }
 
-  const hsize_t dims[1] = {static_cast<hsize_t>(allocation.record.size)};
+  const hsize_t dims[1] = {static_cast<hsize_t>(bytes.size())};
   const hid_t space     = H5Screate_simple(1, dims, nullptr);
   if (space < 0) {
     H5Gclose(group);
@@ -149,9 +146,9 @@ void write_allocation_group(hid_t views_group,
   const hid_t dataset = H5Dcreate2(group, "bytes", H5T_NATIVE_UCHAR, space,
                                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   if (dataset >= 0) {
-    if (allocation.record.size > 0) {
+    if (!bytes.empty()) {
       H5Dwrite(dataset, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT,
-               allocation.ptr);
+               bytes.data());
     }
     H5Dclose(dataset);
   }
