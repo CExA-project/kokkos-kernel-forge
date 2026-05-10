@@ -1,4 +1,7 @@
+#pragma once
+
 #include <cstring>
+#include <tuple>
 #include <utility>
 #include <hip/hip_runtime.h>
 #include <Kokkos_Core.hpp>
@@ -27,8 +30,9 @@
 #define CHECK_HIP_CALL(expr) KOKKOS_IMPL_HIP_SAFE_CALL(expr)
 
 namespace cexa::kernel_replayer::impl {
-inline std::pair<void*, std::size_t> device_allocate(void* target_address,
-                                              std::size_t size, char* data) {
+inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
+                                                      std::size_t size,
+                                                      char* data) {
   int device;
   CHECK_HIP_CALL(hipGetDevice(&device));
 
@@ -77,13 +81,11 @@ inline std::pair<void*, std::size_t> device_allocate(void* target_address,
   KOKKOS_IMPL_HIP_SAFE_CALL(hipMemcpy(reinterpret_cast<void*>(target_address),
                                       data, size, hipMemcpyHostToDevice));
 
-  return std::make_pair(real_address, virtual_range_size);
+  return std::make_tuple(real_address, virtual_range_size);
 }
 
 inline void device_deallocate(void* address, std::size_t size) {
-  if (address) {
-    CHECK_HIP_CALL(hipMemUnmap(address, size));
-    CHECK_HIP_CALL(hipMemAddressFree(address, size));
-  }
+  CHECK_HIP_CALL(hipMemUnmap(address, size));
+  CHECK_HIP_CALL(hipMemAddressFree(address, size));
 }
 }  // namespace cexa::kernel_replayer::impl

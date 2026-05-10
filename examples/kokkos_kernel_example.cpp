@@ -24,13 +24,13 @@ void save_state(std::string_view filename, const std::string& label,
   hsize_t dim = view.size() * sizeof(typename View::value_type);
   std::string dataset_name =
       make_dataset_name<typename View::memory_space>(view.data(), label);
+  auto mirror = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), view);
   H5LTmake_dataset_char(file, dataset_name.data(), 1, &dim,
-                        reinterpret_cast<char*>(view.data()));
+                        reinterpret_cast<char*>(mirror.data()));
 
   hsize_t functor_dim = sizeof(Functor);
   std::string functor_dataset_name =
-      make_dataset_name<typename View::memory_space>(&functor,
-                                                     "kernel_replay_functor");
+      make_dataset_name<Kokkos::HostSpace>(&functor, "kernel_replay_functor");
   H5LTmake_dataset_char(file, functor_dataset_name.data(), 1, &functor_dim,
                         reinterpret_cast<const char*>(&functor));
 

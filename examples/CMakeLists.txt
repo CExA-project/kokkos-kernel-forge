@@ -1,5 +1,6 @@
 add_executable(kokkos_kernel_example kokkos_kernel_example.cpp)
 
+find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)
 
 target_link_libraries(kokkos_kernel_example PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl)

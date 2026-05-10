@@ -10,7 +10,7 @@
 #include <hdf5_hl.h>
 
 #include "kernel_replayer.hpp"
-#include "allocator.hpp"
+#include "allocation.hpp"
 #include "memory_space_type.hpp"
 
 void remove_cli_args(int& argc, char* argv[], int pos, int n) {
@@ -81,6 +81,31 @@ namespace cexa::kernel_replayer {
 
 namespace impl {
 
+static std::unordered_map<std::string, impl::Allocation>* host_allocations;
+#if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+static std::unordered_map<std::string, impl::Allocation>* device_allocations;
+#endif
+
+void* get_allocation(impl::MemorySpaceType memory_space,
+                     const std::string& label) {
+  if (memory_space == impl::MemorySpaceType::HOST) {
+    if (!host_allocations->contains(label)) {
+      return nullptr;
+    }
+    return (*host_allocations)[label].address;
+  } else {
+#if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+    throw std::runtime_error(
+        "Trying to access device allocations but no device space is enabled");
+#else
+    if (!device_allocations->contains(label)) {
+      return nullptr;
+    }
+    return (*device_allocations)[label].address;
+#endif
+  }
+}
+
 void init_functor(char* buffer, std::size_t size) {
   std::size_t N = size;
 #if defined(KOKKOS_ENABLE_CUDA)
@@ -109,9 +134,9 @@ void free_host_buffer(char* ptr, MemorySpaceType mem) {
     delete[] ptr;
   } else {
 #if defined(KOKKOS_ENABLE_CUDA)
-    KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(ptr));
+    KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFreeHost(ptr));
 #elif defined(KOKKOS_ENABLE_HIP)
-    KOKKOS_IMPL_HIP_SAFE_CALL(hipFree(ptr));
+    KOKKOS_IMPL_HIP_SAFE_CALL(hipFreeHost(ptr));
 #endif
   }
 }
@@ -130,8 +155,11 @@ void check_hdf5_call(herr_t status, const char* expr, const char* file,
 #define CHECK_HDF5_CALL(expr) \
   cexa::kernel_replayer::impl::check_hdf5_call(expr, #expr, __FILE__, __LINE__);
 
+using allocate_fun_t = std::function<void(std::string, std::string_view, char*,
+                                          char*, std::size_t)>;
+
 herr_t allocate_hdf5_dataset(hid_t root, const char* name,
-                             const H5O_info_t* info, void*) {
+                             const H5O_info_t* info, void* allocate_fun) {
   if (info->type != H5O_TYPE_DATASET) {
     return 0;
   }
@@ -171,7 +199,8 @@ herr_t allocate_hdf5_dataset(hid_t root, const char* name,
     char* buffer = allocate_host_buffer(buffer_size, memory_space);
     CHECK_HDF5_CALL(H5LTread_dataset_char(root, name, buffer));
 
-    allocate(std::string(label), space, address, buffer, buffer_size);
+    (*reinterpret_cast<allocate_fun_t*>(allocate_fun))(
+        std::string(label), space, address, buffer, buffer_size);
 
     free_host_buffer(buffer, memory_space);
   }
@@ -196,16 +225,47 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
                              std::string(hdf5_filename));
   }
 
-  H5Ovisit1(file, H5_INDEX_NAME, H5_ITER_NATIVE, impl::allocate_hdf5_dataset,
-            nullptr);
+  using namespace std::placeholders;
+  impl::allocate_fun_t allocate_wrapper =
+      std::bind(&ScopeGuard::allocate, this, _1, _2, _3, _4, _5);
+
+  H5Ovisit(file, H5_INDEX_NAME, H5_ITER_NATIVE, impl::allocate_hdf5_dataset,
+           &allocate_wrapper
+#if H5_VERS_MAJOR == 1 && H5_VERS_MINOR >= 12
+           ,
+           H5O_INFO_BASIC
+#endif
+  );
 
   H5Fclose(file);
 
   if (!functor_data.has_value()) {
     throw std::runtime_error("No functor found in the provided hdf5 file");
   }
+
+  impl::host_allocations = &host_allocations;
+#if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+  impl::device_allocations = &device_allocations;
+#endif
 }
 
 ScopeGuard::~ScopeGuard() {}
+
+void ScopeGuard::allocate(std::string label, std::string_view memory_space,
+                          char* address, char* data, std::size_t size) {
+  if (impl::memory_space_type_from_string(memory_space) ==
+      impl::MemorySpaceType::HOST) {
+    host_allocations[label] = impl::Allocation(impl::MemorySpaceType::HOST,
+                                               label, address, data, size);
+  } else {
+#if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+    throw std::runtime_error(
+        "Trying to access device allocations but no device space is enabled");
+#else
+    device_allocations[label] = impl::Allocation(impl::MemorySpaceType::DEVICE,
+                                                 label, address, data, size);
+#endif
+  }
+}
 
 }  // namespace cexa::kernel_replayer

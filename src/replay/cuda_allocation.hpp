@@ -1,14 +1,17 @@
+#pragma once
 
 #include <cstring>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 #include <cuda.h>
 #include <Kokkos_Core.hpp>
 
 namespace cexa::kernel_replayer::impl {
-inline void throw_error(CUresult error, const char* expr, const char* file, int line) {
+inline void throw_error(CUresult error, const char* expr, const char* file,
+                        int line) {
   if (error == CUDA_SUCCESS) {
     return;
   }
@@ -30,10 +33,12 @@ inline void throw_error(CUresult error, const char* expr, const char* file, int 
   throw std::runtime_error(os.str());
 }
 
-#define CHECK_CUDA_CALL(expr) throw_error((expr), #expr, __FILE__, __LINE__)
+#define CHECK_CUDA_CALL(expr) \
+  ::cexa::kernel_replayer::impl::throw_error((expr), #expr, __FILE__, __LINE__)
 
-inline std::pair<void*, std::size_t> device_allocate(void* address, std::size_t size,
-                                              char* data) {
+inline std::tuple<void*, std::size_t> device_allocate(void* address,
+                                                      std::size_t size,
+                                                      char* data) {
   CUdevice device;
   CHECK_CUDA_CALL(cuCtxGetDevice(&device));
 
@@ -49,8 +54,8 @@ inline std::pair<void*, std::size_t> device_allocate(void* address, std::size_t 
   prop.requestedHandleTypes = handleType;
 
   size_t granularity = 0;
-  cuMemGetAllocationGranularity(&granularity, &prop,
-                                CU_MEM_ALLOC_GRANULARITY_MINIMUM);
+  CHECK_CUDA_CALL(cuMemGetAllocationGranularity(
+      &granularity, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM));
   // FIXME: investigate, on jean-zay the allocated addresses are multiple of
   // this, even though granularity is way smaller
   granularity = 0x2000000;
@@ -66,11 +71,15 @@ inline std::pair<void*, std::size_t> device_allocate(void* address, std::size_t 
 
   // Allocate physical memory
   CUmemGenericAllocationHandle allocHandle;
-  cuMemCreate(&allocHandle, virtual_range_size, &prop, 0);
+  CHECK_CUDA_CALL(cuMemCreate(&allocHandle, virtual_range_size, &prop, 0));
 
   // TODO: check if the alignment parameter should be equal to the granularity
   CHECK_CUDA_CALL(cuMemAddressReserve(&real_address, virtual_range_size, 64,
                                       starting_address, 0));
+  if (real_address != starting_address) {
+    throw std::runtime_error(
+        "Failed to allocate data at a specific device address");
+  }
   CHECK_CUDA_CALL(
       cuMemMap(real_address, virtual_range_size, 0, allocHandle, 0));
 
@@ -86,13 +95,13 @@ inline std::pair<void*, std::size_t> device_allocate(void* address, std::size_t 
   KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMemcpy(reinterpret_cast<void*>(target_address),
                                         data, size, cudaMemcpyHostToDevice));
 
-  return std::make_pair(real_address, virtual_range_size);
+  return std::make_tuple(reinterpret_cast<void*>(real_address),
+                         virtual_range_size);
 }
 
 inline void device_deallocate(void* address, std::size_t size) {
-  if (address) {
-    CHECK_CUDA_CALL(cuMemUnmap(address, size));
-    CHECK_CUDA_CALL(cuMemAddressFree(address, size));
-  }
+  CHECK_CUDA_CALL(cuMemUnmap(reinterpret_cast<CUdeviceptr>(address), size));
+  CHECK_CUDA_CALL(
+      cuMemAddressFree(reinterpret_cast<CUdeviceptr>(address), size));
 }
 }  // namespace cexa::kernel_replayer::impl
