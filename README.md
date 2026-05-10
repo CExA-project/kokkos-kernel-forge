@@ -5,9 +5,8 @@ Tools for extracting, profiling, and auto-tuning Kokkos kernels from large HPC a
 Fetch submodules, then configure and build the Kokkos example:
 
 ```sh
+git clone https://github.com/CExA-project/kokkos-kernel-forge.git
 git submodule update --init --recursive
-cmake -S . -B build/serial -DCMAKE_BUILD_TYPE=Release -DKokkos_ENABLE_SERIAL=ON
-cmake --build build/serial -j
 ```
 
 ## Targeted view dumps
@@ -31,3 +30,6 @@ KOKKOS_TOOLS_LIBS=$PWD/build/cuda/libkkf.so \
   KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=sum_values" \
   ./build/cuda/examples/kokkos_kernel_example
 ```
+
+See [HDF5 dump format](docs/hdf5-dumps.md) for the file naming scheme and
+stored metadata.

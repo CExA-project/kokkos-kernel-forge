@@ -42,15 +42,14 @@ std::string sanitize_name(std::string_view value) {
 
 std::string dump_filename(std::string_view label, std::uint64_t kernel_id,
                           std::string_view phase) {
-  return "kkf_" + sanitize_name(label) + "_" + std::to_string(kernel_id) +
-         "_" + std::string(phase) + ".h5";
+  return "kkf_" + sanitize_name(label) + "_" + std::to_string(kernel_id) + "_" +
+         std::string(phase) + ".h5";
 }
 
 bool is_host_accessible_space(const std::string& space) {
-  return space == "Host" || space == "CudaHostPinned" ||
-         space == "CudaUVM" || space == "HIPHostPinned" ||
-         space == "HIPManaged" || space == "SYCLHostUSM" ||
-         space == "SYCLSharedUSM";
+  return space == "Host" || space == "CudaHostPinned" || space == "CudaUVM" ||
+         space == "HIPHostPinned" || space == "HIPManaged" ||
+         space == "SYCLHostUSM" || space == "SYCLSharedUSM";
 }
 
 void write_string_attribute(hid_t object, const char* name,
@@ -105,8 +104,8 @@ void write_int_attribute(hid_t object, const char* name, int value) {
     return;
   }
 
-  const hid_t attr = H5Acreate2(object, name, H5T_NATIVE_INT, space,
-                                H5P_DEFAULT, H5P_DEFAULT);
+  const hid_t attr =
+      H5Acreate2(object, name, H5T_NATIVE_INT, space, H5P_DEFAULT, H5P_DEFAULT);
   if (attr >= 0) {
     H5Awrite(attr, H5T_NATIVE_INT, &value);
     H5Aclose(attr);
@@ -118,12 +117,10 @@ void write_int_attribute(hid_t object, const char* name, int value) {
 void write_allocation_group(hid_t views_group,
                             const ActiveAllocation& allocation,
                             std::size_t index) {
-  const std::string group_name =
-      "view_" + std::to_string(index) + "_" +
-      sanitize_name(allocation.record.label);
-  const hid_t group =
-      H5Gcreate2(views_group, group_name.c_str(), H5P_DEFAULT, H5P_DEFAULT,
-                 H5P_DEFAULT);
+  const std::string group_name = "view_" + std::to_string(index) + "_" +
+                                 sanitize_name(allocation.record.label);
+  const hid_t group = H5Gcreate2(views_group, group_name.c_str(), H5P_DEFAULT,
+                                 H5P_DEFAULT, H5P_DEFAULT);
   if (group < 0) {
     return;
   }
@@ -143,15 +140,14 @@ void write_allocation_group(hid_t views_group,
   }
 
   const hsize_t dims[1] = {static_cast<hsize_t>(allocation.record.size)};
-  const hid_t space = H5Screate_simple(1, dims, nullptr);
+  const hid_t space     = H5Screate_simple(1, dims, nullptr);
   if (space < 0) {
     H5Gclose(group);
     return;
   }
 
-  const hid_t dataset =
-      H5Dcreate2(group, "bytes", H5T_NATIVE_UCHAR, space, H5P_DEFAULT,
-                 H5P_DEFAULT, H5P_DEFAULT);
+  const hid_t dataset = H5Dcreate2(group, "bytes", H5T_NATIVE_UCHAR, space,
+                                   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   if (dataset >= 0) {
     if (allocation.record.size > 0) {
       H5Dwrite(dataset, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT,
