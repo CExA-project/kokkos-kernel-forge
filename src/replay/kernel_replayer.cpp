@@ -132,6 +132,10 @@ void check_hdf5_call(herr_t status, const char* expr, const char* file,
 
 herr_t allocate_hdf5_dataset(hid_t root, const char* name,
                              const H5O_info_t* info, void*) {
+  if (info->type != H5O_TYPE_DATASET) {
+    return 0;
+  }
+
   // The dataset name is of the form "address;space;label"
   std::string_view dataset_name = name;
   auto first_sep                = dataset_name.find_first_of(';');
@@ -182,7 +186,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   std::string_view hdf5_filename = find_hdf5_filename(argc, argv);
   if (hdf5_filename.data() == nullptr) {
     throw std::runtime_error(
-        "The kernel replayer expects the flag --kernel-replay-dump");
+        "The kernel replayer expects the flag --kernel-replayer-dump");
   }
 
   hid_t file = H5Fopen(hdf5_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT);
@@ -201,5 +205,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
     throw std::runtime_error("No functor found in the provided hdf5 file");
   }
 }
+
+ScopeGuard::~ScopeGuard() {}
 
 }  // namespace cexa::kernel_replayer

@@ -19,12 +19,12 @@ class ScopeGuard {
 template <class Functor>
 auto get_functor(const Functor& functor) {
   constexpr int N = sizeof(Functor);
-  char* buffer[N];
+  char buffer[N];
   std::memcpy(buffer, &functor, N);
   impl::init_functor(buffer, N);
-  Functor* new_functor = std::malloc(sizeof(Functor));
-  std::memcpy(new_functor, buffer, N);
+  Functor* new_functor = static_cast<Functor*>(std::malloc(sizeof(Functor)));
+  std::memcpy(static_cast<void*>(new_functor), buffer, N);
 
-  return std::unique_ptr(new_functor, [](Functor* ptr) { free(ptr); });
+  return std::unique_ptr<Functor, decltype([](Functor* ptr) { std::free(ptr); })>(new_functor);
 }
 }  // namespace cexa::kernel_replayer

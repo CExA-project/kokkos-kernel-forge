@@ -24,16 +24,16 @@ struct Allocation<MemorySpaceType::HOST> {
 
   Allocation(std::string label, char* target_address, char* data,
              std::size_t requested_size)
-      : label(label) {
+      : label(label), size(requested_size) {
     static const int page_size = getpagesize();
 
     char* aligned_address = reinterpret_cast<char*>(
         ((reinterpret_cast<std::uintptr_t>(target_address)) / page_size) *
         page_size);
-    requested_size += target_address - aligned_address;
+    size += target_address - aligned_address;
 
-    address = mmap(aligned_address, requested_size, PROT_READ | PROT_WRITE,
-                   MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+    address = mmap(aligned_address, size, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
 
     if (address == MAP_FAILED) {
       if (errno == EEXIST) {
@@ -46,17 +46,16 @@ struct Allocation<MemorySpaceType::HOST> {
             "address: " +
             std::string(std::strerror(errno)));
       }
-    } else if (address != target_address) {
+    } else if (address != aligned_address) {
       // We only reach this branch when the target address already belongs to a
       // reservation on older kernels which don't handle the MAP_FIXED_NOREPLACE
       // case. In that case the kernel allocates on another available address.
-      munmap(address, requested_size);
+      munmap(address, size);
       throw std::runtime_error(
           "Failed to allocate to a predefined host address");
     }
 
-    size = requested_size;
-    memcpy(address, data, size);
+    memcpy(target_address, data, requested_size);
   }
 
   ~Allocation() {
@@ -78,9 +77,9 @@ struct Allocation<MemorySpaceType::HOST> {
   }
 
   Allocation& operator=(Allocation&& other) {
-    label = std::move(other.label);
+    label   = std::move(other.label);
     address = other.address;
-    size = other.size;
+    size    = other.size;
 
     other.address = nullptr;
     other.size    = 0;
