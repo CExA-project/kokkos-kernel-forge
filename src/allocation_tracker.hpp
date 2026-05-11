@@ -12,6 +12,7 @@ namespace kkf {
 struct AllocationRecord {
   std::string label;
   std::string space;
+  const void* p_data;
   std::uint64_t size;
 };
 
@@ -28,7 +29,7 @@ struct AllocationSnapshot {
 class AllocationTracker {
  public:
   void record_allocation(std::string label, std::string space, const void* ptr,
-                         std::uint64_t size);
+                         const void* p_data, std::uint64_t size);
   void record_deallocation(std::string space, const void* ptr);
 
   AllocationSnapshot snapshot() const;

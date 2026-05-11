@@ -125,6 +125,8 @@ void write_allocation_group(hid_t views_group,
   write_string_attribute(group, "label", allocation.record.label);
   write_string_attribute(group, "space", allocation.record.space);
   write_string_attribute(group, "ptr", pointer_to_string(allocation.ptr));
+  write_string_attribute(group, "p_data",
+                         pointer_to_string(allocation.record.p_data));
   write_uint64_attribute(group, "size", allocation.record.size);
 
   std::vector<unsigned char> bytes;

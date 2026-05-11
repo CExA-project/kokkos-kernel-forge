@@ -27,6 +27,14 @@
 
 #define KOKKOS_HOOKS_EXPORT __attribute__((visibility("default")))
 
+#if !defined(KKF_KOKKOS_ALLOCATION_HEADER_SIZE)
+#error "KKF_KOKKOS_ALLOCATION_HEADER_SIZE must be defined by CMake"
+#endif
+
+static_assert(KKF_KOKKOS_ALLOCATION_HEADER_SIZE == 128 ||
+                  KKF_KOKKOS_ALLOCATION_HEADER_SIZE == 256,
+              "unexpected Kokkos allocation header size");
+
 namespace {
 
 std::atomic<std::uint64_t> next_kernel_id{1};
@@ -116,6 +124,11 @@ void dump_views(const char* phase, const std::string& label,
 
 bool should_track_allocation(const char* label, const void* ptr) {
   return ptr != nullptr && is_user_label(label);
+}
+
+const void* allocation_data_pointer(const void* ptr) {
+  return static_cast<const unsigned char*>(ptr) +
+         KKF_KOKKOS_ALLOCATION_HEADER_SIZE;
 }
 
 void begin_kernel(const char* hook_name, const char* label,
@@ -229,16 +242,17 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
     const void* ptr, const std::uint64_t size) {
   const std::string allocation_label = label_or_unknown(label);
   const std::string allocation_space = space_name(space);
+  const void* p_data = ptr != nullptr ? allocation_data_pointer(ptr) : nullptr;
 
   if (should_track_allocation(label, ptr)) {
     allocation_tracker.record_allocation(allocation_label, allocation_space,
-                                         ptr, size);
+                                         ptr, p_data, size);
   }
 
   if (is_user_label(label)) {
     log_line("kokkosp_allocate_data allocation_create label=\"",
              allocation_label, "\" space=\"", allocation_space, "\" ptr=", ptr,
-             " size=", size);
+             " p_data=", p_data, " size=", size);
   }
 }
 
@@ -269,6 +283,7 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {
   for (const kkf::ActiveAllocation& allocation : snapshot.allocations) {
     log_line("outstanding_allocation label=\"", allocation.record.label,
              "\" space=\"", allocation.record.space, "\" ptr=", allocation.ptr,
+             " p_data=", allocation.record.p_data,
              " size=", allocation.record.size);
   }
 }

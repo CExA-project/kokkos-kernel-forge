@@ -32,6 +32,7 @@ group stores:
 label        # Kokkos allocation label
 space        # Kokkos memory space name reported by the profiling hook
 ptr          # allocation pointer value, stored as text
+p_data       # user data pointer after the Kokkos allocation header
 size         # allocation size in bytes
 bytes_dumped
 ```

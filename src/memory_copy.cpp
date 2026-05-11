@@ -12,25 +12,17 @@
 #include <hip/hip_runtime_api.h>
 #endif
 
-#if !defined(KKF_KOKKOS_ALLOCATION_HEADER_SIZE)
-#error "KKF_KOKKOS_ALLOCATION_HEADER_SIZE must be defined by CMake"
-#endif
-
-static_assert(KKF_KOKKOS_ALLOCATION_HEADER_SIZE == 128 ||
-                  KKF_KOKKOS_ALLOCATION_HEADER_SIZE == 256,
-              "unexpected Kokkos allocation header size");
-
 namespace kkf {
 namespace {
 
 bool is_host_accessible_space(const std::string& space) {
-  return space == "Host" || space == "HostSpace" ||
-         space == "CudaHostPinned" || space == "CudaHostPinnedSpace" ||
-         space == "CudaUVM" || space == "CudaUVMSpace" ||
-         space == "HIPHostPinned" || space == "HIPHostPinnedSpace" ||
-         space == "HIPManaged" || space == "HIPManagedSpace" ||
-         space == "SYCLHostUSM" || space == "SYCLHostUSMSpace" ||
-         space == "SYCLSharedUSM" || space == "SYCLSharedUSMSpace";
+  return space == "Host" || space == "HostSpace" || space == "CudaHostPinned" ||
+         space == "CudaHostPinnedSpace" || space == "CudaUVM" ||
+         space == "CudaUVMSpace" || space == "HIPHostPinned" ||
+         space == "HIPHostPinnedSpace" || space == "HIPManaged" ||
+         space == "HIPManagedSpace" || space == "SYCLHostUSM" ||
+         space == "SYCLHostUSMSpace" || space == "SYCLSharedUSM" ||
+         space == "SYCLSharedUSMSpace";
 }
 
 bool is_cuda_device_space(const std::string& space) {
@@ -59,20 +51,11 @@ std::string allocate_staging_buffer(const ActiveAllocation& allocation,
   return {};
 }
 
-std::size_t kokkos_allocation_header_size() {
-  return KKF_KOKKOS_ALLOCATION_HEADER_SIZE;
-}
-
-const void* allocation_data_pointer(const ActiveAllocation& allocation) {
-  return static_cast<const unsigned char*>(allocation.ptr) +
-         kokkos_allocation_header_size();
-}
-
 }  // namespace
 
 std::string copy_allocation_bytes(const ActiveAllocation& allocation,
                                   std::vector<unsigned char>& bytes) {
-  const std::string& space = allocation.record.space;
+  const std::string& space   = allocation.record.space;
   const bool host_accessible = is_host_accessible_space(space);
   const bool cuda_device     = is_cuda_device_space(space);
   const bool hip_device      = is_hip_device_space(space);
@@ -96,7 +79,11 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
     return reason;
   }
 
-  const void* data = allocation_data_pointer(allocation);
+  const void* data = allocation.record.p_data;
+  if (data == nullptr) {
+    bytes.clear();
+    return "allocation data pointer is null";
+  }
 
   if (host_accessible) {
     std::memcpy(bytes.data(), data, bytes.size());
