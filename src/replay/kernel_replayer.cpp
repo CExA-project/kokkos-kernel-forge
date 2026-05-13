@@ -1,11 +1,13 @@
 #include <Kokkos_Core.hpp>
 #include <cassert>
+#include <iostream>
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
 #include <vector>
 
+#include <H5Apublic.h>
 #include <hdf5.h>
 #include <hdf5_hl.h>
 
@@ -158,31 +160,46 @@ void check_hdf5_call(herr_t status, const char* expr, const char* file,
 using allocate_fun_t = std::function<void(std::string, std::string_view, char*,
                                           char*, std::size_t)>;
 
-herr_t allocate_hdf5_dataset(hid_t root, const char* name,
-                             const H5O_info_t* info, void* allocate_fun) {
-  if (info->type != H5O_TYPE_DATASET) {
-    return 0;
+std::string get_hdf5_string_attribute(hid_t group, const char* name,
+                                      const char* attr_name) {
+  hid_t attr_id =
+      H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT);
+  if (attr_id == H5I_INVALID_HID) {
+    throw std::runtime_error(
+        "Error when reading the dump file: group does not contain a " +
+        std::string(attr_name) + "attribute");
   }
 
-  // The dataset name is of the form "address;space;label"
-  std::string_view dataset_name = name;
-  auto first_sep                = dataset_name.find_first_of(';');
-  std::string_view address_str  = dataset_name.substr(0, first_sep);
-  char* address =
-      reinterpret_cast<char*>(std::stoull(std::string(address_str)));
-  auto second_sep = dataset_name.find_first_of(';', first_sep + 1);
-  std::string_view space =
-      dataset_name.substr(first_sep + 1, second_sep - (first_sep + 1));
-  std::string_view label = dataset_name.substr(second_sep + 1);
+  H5A_info_t attr_info;
+  CHECK_HDF5_CALL(H5Aget_info(attr_id, &attr_info));
+  hid_t type = H5Aget_type(attr_id);
+  std::string attribute(attr_info.data_size, '\0');
+  CHECK_HDF5_CALL(H5Aread(attr_id, type, attribute.data()));
+
+  // remove the null-terminator
+  attribute.pop_back();
+  CHECK_HDF5_CALL(H5Aclose(attr_id));
+
+  return attribute;
+}
+
+herr_t allocate_hdf5_dataset(hid_t group, const char* name,
+                             const H5L_info_t* info, void* allocate_fun) {
+  std::string label = get_hdf5_string_attribute(group, name, "label");
+  std::string space = get_hdf5_string_attribute(group, name, "space");
+  char* address     = reinterpret_cast<char*>(std::stoull(
+      get_hdf5_string_attribute(group, name, "p_data"), nullptr, 16));
 
   int rank = 0;
-  CHECK_HDF5_CALL(H5LTget_dataset_ndims(root, name, &rank));
+  std::string dataset_name(name);
+  dataset_name += "/bytes";
+  CHECK_HDF5_CALL(H5LTget_dataset_ndims(group, dataset_name.c_str(), &rank));
   std::vector<hsize_t> dims(rank);
   H5T_class_t datatype;
   std::size_t datatype_size;
 
-  CHECK_HDF5_CALL(
-      H5LTget_dataset_info(root, name, dims.data(), &datatype, &datatype_size));
+  CHECK_HDF5_CALL(H5LTget_dataset_info(group, dataset_name.c_str(), dims.data(),
+                                       &datatype, &datatype_size));
   // We only deal with arrays of chars
   assert(datatype == H5T_INTEGER);
   assert(datatype_size == 1);
@@ -192,15 +209,16 @@ herr_t allocate_hdf5_dataset(hid_t root, const char* name,
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
   if (memory_space == MemorySpaceType::HOST &&
-      label == "kernel_replay_functor") {
+      label == "kernel_replayer_functor") {
     functor_data.emplace(buffer_size);
-    CHECK_HDF5_CALL(H5LTread_dataset_char(root, name, functor_data->data()));
+    CHECK_HDF5_CALL(H5LTread_dataset_char(group, dataset_name.c_str(),
+                                          functor_data->data()));
   } else {
     char* buffer = allocate_host_buffer(buffer_size, memory_space);
-    CHECK_HDF5_CALL(H5LTread_dataset_char(root, name, buffer));
+    CHECK_HDF5_CALL(H5LTread_dataset_char(group, dataset_name.c_str(), buffer));
 
-    (*reinterpret_cast<allocate_fun_t*>(allocate_fun))(
-        std::string(label), space, address, buffer, buffer_size);
+    (*reinterpret_cast<allocate_fun_t*>(allocate_fun))(label, space, address,
+                                                       buffer, buffer_size);
 
     free_host_buffer(buffer, memory_space);
   }
@@ -229,13 +247,10 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   impl::allocate_fun_t allocate_wrapper =
       std::bind(&ScopeGuard::allocate, this, _1, _2, _3, _4, _5);
 
-  H5Ovisit(file, H5_INDEX_NAME, H5_ITER_NATIVE, impl::allocate_hdf5_dataset,
-           &allocate_wrapper
-#if H5_VERS_MAJOR == 1 && H5_VERS_MINOR >= 12
-           ,
-           H5O_INFO_BASIC
-#endif
-  );
+  hsize_t idx = 0;
+  H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+                     impl::allocate_hdf5_dataset, &allocate_wrapper,
+                     H5P_DEFAULT);
 
   H5Fclose(file);
 
