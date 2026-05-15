@@ -211,11 +211,12 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name,
   if (memory_space == MemorySpaceType::HOST &&
       label == "kernel_replayer_functor") {
     functor_data.emplace(buffer_size);
-    CHECK_HDF5_CALL(H5LTread_dataset_char(group, dataset_name.c_str(),
-                                          functor_data->data()));
+    CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
+                                     H5T_NATIVE_UCHAR, functor_data->data()));
   } else {
     char* buffer = allocate_host_buffer(buffer_size, memory_space);
-    CHECK_HDF5_CALL(H5LTread_dataset_char(group, dataset_name.c_str(), buffer));
+    CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
+                                     H5T_NATIVE_UCHAR, buffer));
 
     (*reinterpret_cast<allocate_fun_t*>(allocate_fun))(label, space, address,
                                                        buffer, buffer_size);
