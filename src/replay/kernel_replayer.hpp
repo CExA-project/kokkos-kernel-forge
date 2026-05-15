@@ -30,7 +30,7 @@ class ScopeGuard {
   ~ScopeGuard();
 };
 
-template <Kokkos::MemorySpace MemorySpace>
+template <class MemorySpace>
 void* get_allocation(const std::string& label) {
   return impl::get_allocation(
       impl::memory_space_type_from_string(MemorySpace::name()), label);

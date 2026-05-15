@@ -121,13 +121,13 @@ char* allocate_host_buffer(std::size_t size, MemorySpaceType mem) {
   if (mem == MemorySpaceType::HOST) {
     return new char[size];
   } else {
-    char* ptr = nullptr;
+    void* ptr = nullptr;
 #if defined(KOKKOS_ENABLE_CUDA)
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMallocHost(&ptr, size));
 #elif defined(KOKKOS_ENABLE_HIP)
-    KOKKOS_IMPL_HIP_SAFE_CALL(hipMallocHost(&ptr, size));
+    KOKKOS_IMPL_HIP_SAFE_CALL(hipHostMalloc(&ptr, size));
 #endif
-    return ptr;
+    return static_cast<char*>(ptr);
   }
 }
 
@@ -138,7 +138,7 @@ void free_host_buffer(char* ptr, MemorySpaceType mem) {
 #if defined(KOKKOS_ENABLE_CUDA)
     KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFreeHost(ptr));
 #elif defined(KOKKOS_ENABLE_HIP)
-    KOKKOS_IMPL_HIP_SAFE_CALL(hipFreeHost(ptr));
+    KOKKOS_IMPL_HIP_SAFE_CALL(hipHostFree(ptr));
 #endif
   }
 }
