@@ -39,11 +39,23 @@ void* get_allocation(const std::string& label) {
 template <class Functor>
 auto get_functor(const Functor& functor) {
   constexpr int N = sizeof(Functor);
-  char buffer[N];
-  std::memcpy(buffer, &functor, N);
-  impl::init_functor(buffer, N);
-  Functor* new_functor = static_cast<Functor*>(std::malloc(sizeof(Functor)));
-  std::memcpy(static_cast<void*>(new_functor), buffer, N);
+
+  // We create a temporary copy of the functor using placement new and the copy
+  // constructor, as lambdas with a capture don't have a default contructor or
+  // assignment operators. We then copy the data of the extracted functor into
+  // it.
+  void* tmp_buffer = std::aligned_alloc(alignof(Functor), N);
+  Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
+  Functor* tmp_functor = new (tmp_buffer) Functor(functor);
+  impl::init_functor(static_cast<char*>(tmp_buffer), N);
+
+  // We create a copy of the extracted functor with allocation tracking
+  // disabled, so that when the destructors of views contained in the extracted
+  // funcor are called, we won't get a segfault.
+  void* buffer         = std::aligned_alloc(alignof(Functor), N);
+  Functor* new_functor = new (buffer) Functor(*tmp_functor);
+  Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
+  std::free(tmp_buffer);
 
   return std::unique_ptr<Functor, decltype([](Functor* ptr) {
                            std::free(ptr);

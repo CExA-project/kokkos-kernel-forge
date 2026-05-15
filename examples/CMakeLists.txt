@@ -3,7 +3,7 @@ add_executable(kokkos_kernel_example kokkos_kernel_example.cpp)
 find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)
 
-target_link_libraries(kokkos_kernel_example PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl)
+target_link_libraries(kokkos_kernel_example PRIVATE Kokkos::kokkos kernel_extractor)
 target_compile_features(kokkos_kernel_example PRIVATE cxx_std_20)
 
 add_executable(kernel_replay kernel_replay.cpp)
