@@ -1,0 +1,7 @@
+add_executable(scalar_capture main.cpp)
+target_link_libraries(scalar_capture PRIVATE Kokkos::kokkos kernel_extractor)
+
+add_executable(scalar_capture_replay replay_main.cpp)
+target_link_libraries(scalar_capture_replay PRIVATE Kokkos::kokkos kernel_replayer)
+
+add_replay_test(scalar_capture TRUE)

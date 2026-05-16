@@ -8,3 +8,4 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
 endfunction()
 
 add_subdirectory(no_capture)
+add_subdirectory(scalar_capture)
