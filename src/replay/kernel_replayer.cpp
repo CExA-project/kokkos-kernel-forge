@@ -183,8 +183,8 @@ std::string get_hdf5_string_attribute(hid_t group, const char* name,
   return attribute;
 }
 
-herr_t allocate_hdf5_dataset(hid_t group, const char* name,
-                             const H5L_info_t* info, void* allocate_fun) {
+herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
+                             void* allocate_fun) {
   std::string label = get_hdf5_string_attribute(group, name, "label");
   std::string space = get_hdf5_string_attribute(group, name, "space");
   char* address     = reinterpret_cast<char*>(std::stoull(
