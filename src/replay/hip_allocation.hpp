@@ -6,30 +6,17 @@
 #include <hip/hip_runtime.h>
 #include <Kokkos_Core.hpp>
 
-// void throw_error(hipError_t error, const char* expr, const char* file, int
-// line) {
-//   if (error == hipSuccess) {
-//     return;
-//   }
-//   const char* name        = hipGetErrorName(error);
-//   const char* description = hipGetErrorString(error);
-//   std::ostringstream os;
-//   if (file) {
-//     os << file << ":" << line << ": ";
-//   }
-//   os << "Call " << expr << " failed with:\n";
-//   if (name) {
-//     os << name;
-//     if (description) {
-//       os << ": " << description;
-//     }
-//   }
-//   throw std::runtime_error(os.str());
-// }
-
 #define CHECK_HIP_CALL(expr) KOKKOS_IMPL_HIP_SAFE_CALL(expr)
 
 namespace cexa::kernel_replayer::impl {
+inline auto regular_device_allocate(std::size_t size, char* data) {
+  void* ptr;
+  CHECK_HIP_CALL(hipMalloc(&ptr, size));
+  CHECK_HIP_CALL(hipMemcpy(ptr, data, size, hipMemcpyHostToDevice));
+  return std::unique_ptr<void, void (*)(void*)>(
+      ptr, [](void* ptr) { CHECK_HIP_CALL(hipFree(ptr)); });
+}
+
 inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
                                                       std::size_t size,
                                                       char* data) {
@@ -78,8 +65,8 @@ inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
       hipMemSetAccess(real_address, virtual_range_size, &accessDesc, 1));
 
   CHECK_HIP_CALL(hipMemRelease(allocHandle));
-  KOKKOS_IMPL_HIP_SAFE_CALL(hipMemcpy(reinterpret_cast<void*>(target_address),
-                                      data, size, hipMemcpyHostToDevice));
+  CHECK_HIP_CALL(hipMemcpy(reinterpret_cast<void*>(target_address), data, size,
+                           hipMemcpyHostToDevice));
 
   return std::make_tuple(real_address, virtual_range_size);
 }

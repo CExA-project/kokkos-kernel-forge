@@ -11,17 +11,26 @@ namespace impl {
 void init_functor(char* buffer, std::size_t size);
 void* get_allocation(impl::MemorySpaceType memory_space,
                      const std::string& label);
+void* get_out_allocation(impl::MemorySpaceType memory_space,
+                         const std::string& label);
 }  // namespace impl
 
 class ScopeGuard {
  private:
   std::unordered_map<std::string, impl::Allocation> host_allocations;
+  std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>
+      host_output_allocations;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
   std::unordered_map<std::string, impl::Allocation> device_allocations;
+  std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>
+      device_output_allocations;
 #endif
 
   void allocate(std::string label, std::string_view memory_space, char* address,
                 char* data, std::size_t size);
+
+  void allocate(std::string label, std::string_view memory_space, char* data,
+                std::size_t size);
 
  public:
   ScopeGuard(int& argc, char* argv[]);
@@ -33,6 +42,12 @@ class ScopeGuard {
 template <class MemorySpace>
 void* get_allocation(const std::string& label) {
   return impl::get_allocation(
+      impl::memory_space_type_from_string(MemorySpace::name()), label);
+}
+
+template <class MemorySpace>
+void* get_out_allocation(const std::string& label) {
+  return impl::get_out_allocation(
       impl::memory_space_type_from_string(MemorySpace::name()), label);
 }
 

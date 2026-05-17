@@ -29,7 +29,7 @@ if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
 fi
 
-$REPLAY_EXECUTABLE --kernel-replayer-dump="$(ls *_in.h5)" | tee "$REPLAY_OUTPUT"
+$REPLAY_EXECUTABLE --kernel-replayer-dump="$(ls *_in.h5)" --kernel-replayer-out-dump="$(ls *_out.h5)" | tee "$REPLAY_OUTPUT"
 if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
 fi

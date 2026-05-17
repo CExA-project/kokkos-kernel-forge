@@ -36,6 +36,15 @@ inline void throw_error(CUresult error, const char* expr, const char* file,
 #define CHECK_CUDA_CALL(expr) \
   ::cexa::kernel_replayer::impl::throw_error((expr), #expr, __FILE__, __LINE__)
 
+inline auto regular_device_allocate(std::size_t size, char* data) {
+  void* ptr;
+  KOKKOS_IMPL_CUDA_SAFE_CALL(cudaMalloc(&ptr, size));
+  KOKKOS_IMPL_CUDA_SAFE_CALL(
+      cudaMemcpy(ptr, data, size, cudaMemcpyHostToDevice));
+  return std::unique_ptr<void, void (*)(void*)>(
+      ptr, [](void* ptr) { KOKKOS_IMPL_CUDA_SAFE_CALL(cudaFree(ptr)); });
+}
+
 inline std::tuple<void*, std::size_t> device_allocate(void* address,
                                                       std::size_t size,
                                                       char* data) {

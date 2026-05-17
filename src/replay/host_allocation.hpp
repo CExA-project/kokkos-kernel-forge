@@ -12,9 +12,15 @@
 
 namespace cexa::kernel_replayer::impl {
 
+inline auto regular_host_allocate(std::size_t size, char* data) {
+  void* ptr = std::malloc(size);
+  std::memcpy(ptr, data, size);
+  return std::unique_ptr<void, void (*)(void*)>(ptr, std::free);
+}
+
 inline std::tuple<void*, std::size_t> host_allocate(void* target_address,
-                                                   std::size_t size,
-                                                   char* data) {
+                                                    std::size_t size,
+                                                    char* data) {
   static const int page_size = getpagesize();
 
   const std::size_t requested_size = size;

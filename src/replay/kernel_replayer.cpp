@@ -24,28 +24,32 @@ void remove_cli_args(int& argc, char* argv[], int pos, int n) {
   argc -= n;
 }
 
-std::string_view find_hdf5_filename(int& argc, char* argv[]) {
-  std::string_view hdf5_filename;
+std::string_view find_flag_argument(int& argc, char* argv[],
+                                    std::string_view flag) {
+  std::string_view argument;
   for (int i = 1; i < argc; i++) {
     std::string_view current_arg{argv[i]};
-    if (current_arg.starts_with("--kernel-replayer-dump=")) {
-      auto equal    = current_arg.find_first_of('=');
-      hdf5_filename = current_arg.substr(equal + 1);
+    // --flag=argument
+    if (current_arg.size() > flag.size() && current_arg.starts_with(flag) &&
+        current_arg[flag.size()] == '=') {
+      auto equal = current_arg.find_first_of('=');
+      argument   = current_arg.substr(equal + 1);
       remove_cli_args(argc, argv, i, 1);
       break;
     }
 
-    if (current_arg == "--kernel-replayer-dump") {
+    // --flag argument
+    if (current_arg == flag) {
       if (i + 1 == argc) {
         break;
       }
-      hdf5_filename = argv[i + 1];
+      argument = argv[i + 1];
       remove_cli_args(argc, argv, i, 2);
       break;
     }
   }
 
-  return hdf5_filename;
+  return argument;
 }
 
 void device_init() {
@@ -84,8 +88,12 @@ namespace cexa::kernel_replayer {
 namespace impl {
 
 static std::unordered_map<std::string, impl::Allocation>* host_allocations;
+static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
+    host_output_allocations;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
 static std::unordered_map<std::string, impl::Allocation>* device_allocations;
+static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
+    device_output_allocations;
 #endif
 
 void* get_allocation(impl::MemorySpaceType memory_space,
@@ -104,6 +112,28 @@ void* get_allocation(impl::MemorySpaceType memory_space,
       return nullptr;
     }
     return (*device_allocations)[label].address;
+#endif
+  }
+}
+
+void* get_out_allocation(impl::MemorySpaceType memory_space,
+                         const std::string& label) {
+  if (memory_space == impl::MemorySpaceType::HOST) {
+    auto it = host_output_allocations->find(label);
+    if (it == host_output_allocations->end()) {
+      return nullptr;
+    }
+    return it->second.get();
+  } else {
+#if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+    throw std::runtime_error(
+        "Trying to access device allocations but no device space is enabled");
+#else
+    auto it = device_output_allocations->find(label);
+    if (it == device_output_allocations->end()) {
+      return nullptr;
+    }
+    return it->second.get();
 #endif
   }
 }
@@ -209,7 +239,7 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
   if (memory_space == MemorySpaceType::HOST &&
-      label == "kernel_replayer_functor") {
+      label == "kernel_replayer_functor" && !functor_data.has_value()) {
     functor_data.emplace(buffer_size);
     CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
                                      H5T_NATIVE_UCHAR, functor_data->data()));
@@ -231,7 +261,8 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
 ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   device_init();
 
-  std::string_view hdf5_filename = find_hdf5_filename(argc, argv);
+  std::string_view hdf5_filename =
+      find_flag_argument(argc, argv, "--kernel-replayer-dump");
   if (hdf5_filename.data() == nullptr) {
     throw std::runtime_error(
         "The kernel replayer expects the flag --kernel-replayer-dump");
@@ -244,9 +275,11 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
                              std::string(hdf5_filename));
   }
 
-  using namespace std::placeholders;
   impl::allocate_fun_t allocate_wrapper =
-      std::bind(&ScopeGuard::allocate, this, _1, _2, _3, _4, _5);
+      [this](std::string label, std::string_view memory_space, char* address,
+             char* data, std::size_t size) {
+        allocate(label, memory_space, address, data, size);
+      };
 
   hsize_t idx = 0;
   H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
@@ -255,13 +288,38 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   H5Fclose(file);
 
+  std::string_view hdf5_output_filename =
+      find_flag_argument(argc, argv, "--kernel-replayer-out-dump");
+  if (hdf5_output_filename.data() != nullptr) {
+    file = H5Fopen(hdf5_output_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT);
+
+    if (file == H5I_INVALID_HID) {
+      throw std::runtime_error("Failed to open hdf5 file " +
+                               std::string(hdf5_output_filename));
+    }
+
+    impl::allocate_fun_t allocate_wrapper =
+        [this](std::string label, std::string_view memory_space, char*,
+               char* data,
+               std::size_t size) { allocate(label, memory_space, data, size); };
+
+    hsize_t idx = 0;
+    H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+                       impl::allocate_hdf5_dataset, &allocate_wrapper,
+                       H5P_DEFAULT);
+
+    H5Fclose(file);
+  }
+
   if (!functor_data.has_value()) {
     throw std::runtime_error("No functor found in the provided hdf5 file");
   }
 
-  impl::host_allocations = &host_allocations;
+  impl::host_allocations        = &host_allocations;
+  impl::host_output_allocations = &host_output_allocations;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
-  impl::device_allocations = &device_allocations;
+  impl::device_allocations        = &device_allocations;
+  impl::device_output_allocations = &device_output_allocations;
 #endif
 }
 
@@ -280,6 +338,23 @@ void ScopeGuard::allocate(std::string label, std::string_view memory_space,
 #else
     device_allocations[label] = impl::Allocation(impl::MemorySpaceType::DEVICE,
                                                  label, address, data, size);
+#endif
+  }
+}
+
+void ScopeGuard::allocate(std::string label, std::string_view memory_space,
+                          char* data, std::size_t size) {
+  if (impl::memory_space_type_from_string(memory_space) ==
+      impl::MemorySpaceType::HOST) {
+    host_output_allocations.insert(
+        {label, impl::regular_host_allocate(size, data)});
+  } else {
+#if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+    throw std::runtime_error(
+        "Trying to access device allocations but no device space is enabled");
+#else
+    device_output_allocations.insert(
+        {label, impl::regular_device_allocate(size, data)});
 #endif
   }
 }

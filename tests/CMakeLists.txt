@@ -9,3 +9,4 @@ endfunction()
 
 add_subdirectory(no_capture)
 add_subdirectory(scalar_capture)
+add_subdirectory(view_capture)
