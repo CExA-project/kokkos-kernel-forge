@@ -102,7 +102,7 @@ void* get_allocation(impl::MemorySpaceType memory_space,
     if (!host_allocations->contains(label)) {
       return nullptr;
     }
-    return (*host_allocations)[label].address;
+    return (*host_allocations)[label].target_address;
   } else {
 #if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
     throw std::runtime_error(
@@ -111,7 +111,7 @@ void* get_allocation(impl::MemorySpaceType memory_space,
     if (!device_allocations->contains(label)) {
       return nullptr;
     }
-    return (*device_allocations)[label].address;
+    return (*device_allocations)[label].target_address;
 #endif
   }
 }

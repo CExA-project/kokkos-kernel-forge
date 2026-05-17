@@ -15,8 +15,9 @@ int main(int argc, char* argv[]) {
                            KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
   Kokkos::fence();
 
-  auto h_values = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
-  Kokkos::printf("values(5) = %d", h_values(5));
+  auto h_values =
+      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
+  Kokkos::printf("values(5) = %d\n", h_values(5));
 
   return 0;
 }

@@ -42,7 +42,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  Kokkos::printf("values(5) = %d", h_replay_values(5));
+  Kokkos::printf("values(5) = %d\n", h_replay_values(5));
 
   return 0;
 }

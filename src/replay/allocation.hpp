@@ -20,15 +20,18 @@
 namespace cexa::kernel_replayer::impl {
 struct Allocation {
   std::string label;
-  void* address    = nullptr;
-  std::size_t size = 0;
+  void* address        = nullptr;
+  void* target_address = nullptr;
+  std::size_t size     = 0;
   MemorySpaceType memory_space;
 
   Allocation() = default;
 
   Allocation(MemorySpaceType memory_space, std::string label,
              char* target_address, char* data, std::size_t requested_size)
-      : label(label), memory_space(memory_space) {
+      : label(label),
+        target_address(target_address),
+        memory_space(memory_space) {
     if (memory_space == MemorySpaceType::HOST) {
       std::tie(address, size) =
           host_allocate(target_address, requested_size, data);
@@ -67,18 +70,22 @@ struct Allocation {
   Allocation(Allocation&& other)
       : label(std::move(other.label)),
         address(other.address),
+        target_address(other.target_address),
         size(other.size) {
-    other.address = nullptr;
-    other.size    = 0;
+    other.address        = nullptr;
+    other.target_address = nullptr;
+    other.size           = 0;
   }
 
   Allocation& operator=(Allocation&& other) {
-    label   = std::move(other.label);
-    address = other.address;
-    size    = other.size;
+    label          = std::move(other.label);
+    address        = other.address;
+    target_address = other.target_address;
+    size           = other.size;
 
-    other.address = nullptr;
-    other.size    = 0;
+    other.address        = nullptr;
+    other.target_address = nullptr;
+    other.size           = 0;
 
     return *this;
   }
