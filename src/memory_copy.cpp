@@ -15,22 +15,21 @@
 namespace kkf {
 namespace {
 
+// SYCLDeviceUSM and OpenACCSpace, need dedicated device-to-host 
+// copy paths before they can be dumped safely.
 bool is_host_accessible_space(const std::string& space) {
-  return space == "Host" || space == "HostSpace" || space == "CudaHostPinned" ||
-         space == "CudaHostPinnedSpace" || space == "CudaUVM" ||
-         space == "CudaUVMSpace" || space == "HIPHostPinned" ||
-         space == "HIPHostPinnedSpace" || space == "HIPManaged" ||
-         space == "HIPManagedSpace" || space == "SYCLHostUSM" ||
-         space == "SYCLHostUSMSpace" || space == "SYCLSharedUSM" ||
-         space == "SYCLSharedUSMSpace";
+  return space == "Host" || space == "CudaHostPinned" ||
+         space == "CudaUVM" || space == "HIPHostPinned" ||
+         space == "HIPManaged" || space == "SYCLHostUSM" ||
+         space == "SYCLSharedUSM" || space == "NextSiliconSharedSpace";
 }
 
 bool is_cuda_device_space(const std::string& space) {
-  return space == "Cuda" || space == "CudaSpace";
+  return space == "Cuda";
 }
 
 bool is_hip_device_space(const std::string& space) {
-  return space == "HIP" || space == "HIPSpace";
+  return space == "HIP";
 }
 
 std::string allocate_staging_buffer(const ActiveAllocation& allocation,
