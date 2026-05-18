@@ -63,8 +63,7 @@ std::string label_or_unknown(const char* label) {
 
 bool is_internal_label(std::string_view label) {
   return label.starts_with("Kokkos::") || label.starts_with("HostSpace::") ||
-         label.starts_with("CudaSpace::") ||
-         label.starts_with("HIPSpace::") ||
+         label.starts_with("CudaSpace::") || label.starts_with("HIPSpace::") ||
          label.starts_with("SYCLSpace::") ||
          label.starts_with("OpenACCSpace::") ||
          label.starts_with("NextSiliconSpace::") ||
