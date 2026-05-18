@@ -61,19 +61,14 @@ std::string label_or_unknown(const char* label) {
   return label != nullptr ? label : "<unknown>";
 }
 
-bool starts_with(std::string_view value, std::string_view prefix) {
-  return value.size() >= prefix.size() &&
-         value.compare(0, prefix.size(), prefix) == 0;
-}
-
 bool is_internal_label(std::string_view label) {
-  return starts_with(label, "Kokkos::") || starts_with(label, "HostSpace::") ||
-         starts_with(label, "CudaSpace::") ||
-         starts_with(label, "HIPSpace::") ||
-         starts_with(label, "SYCLSpace::") ||
-         starts_with(label, "OpenACCSpace::") ||
-         starts_with(label, "NextSiliconSpace::") ||
-         starts_with(label, "KOKKOS_") || starts_with(label, "kokkos.");
+  return label.starts_with("Kokkos::") || label.starts_with("HostSpace::") ||
+         label.starts_with("CudaSpace::") ||
+         label.starts_with("HIPSpace::") ||
+         label.starts_with("SYCLSpace::") ||
+         label.starts_with("OpenACCSpace::") ||
+         label.starts_with("NextSiliconSpace::") ||
+         label.starts_with("KOKKOS_") || label.starts_with("kokkos.");
 }
 
 bool is_user_label(const char* label) {
@@ -230,7 +225,7 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
                                                        char** argv) {
   for (int i = 0; i < argc; ++i) {
     const std::string_view argument = argv[i] != nullptr ? argv[i] : "";
-    if (starts_with(argument, dump_kernel_label_option)) {
+    if (argument.starts_with(dump_kernel_label_option)) {
       dump_kernel_label =
           std::string(argument.substr(dump_kernel_label_option.size()));
     }
