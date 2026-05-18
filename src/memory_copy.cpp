@@ -35,14 +35,8 @@ bool is_hip_device_space(const std::string& space) {
 
 std::string allocate_staging_buffer(const ActiveAllocation& allocation,
                                     std::vector<unsigned char>& bytes) {
-  const std::uint64_t size = allocation.record.size;
-  if (size >
-      static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
-    return "allocation is too large to copy on this platform";
-  }
-
   try {
-    bytes.resize(static_cast<std::size_t>(size));
+    bytes.resize(static_cast<std::size_t>(allocation.record.size));
   } catch (const std::exception& error) {
     return std::string("could not allocate host staging buffer: ") +
            error.what();
