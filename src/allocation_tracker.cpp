@@ -5,13 +5,13 @@
 namespace kkf {
 
 void AllocationTracker::record_allocation(std::string label, std::string space,
-                                          const void* ptr,
+                                          const void* ptr, const void* p_data,
                                           const std::uint64_t size) {
   if (ptr == nullptr) {
     return;
   }
 
-  AllocationRecord record{std::move(label), space, size};
+  AllocationRecord record{std::move(label), space, p_data, size};
   std::lock_guard<std::mutex> lock(mutex_);
   active_allocations_[space].insert_or_assign(ptr, std::move(record));
 }
