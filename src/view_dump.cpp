@@ -27,7 +27,7 @@ std::string sanitize_name(std::string_view value) {
   result.reserve(value.size());
   for (const char c : value) {
     const auto byte = static_cast<unsigned char>(c);
-    if (std::isalnum(byte) != 0 || c == '_' || c == '-' || c == '.') {
+    if (std::isalnum(byte) || c == '_' || c == '-' || c == '.') {
       result.push_back(c);
     } else {
       result.push_back('_');
