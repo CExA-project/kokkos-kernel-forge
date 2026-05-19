@@ -17,14 +17,11 @@ inline auto regular_device_allocate(std::size_t size, char* data) {
       ptr, [](void* ptr) { CHECK_HIP_CALL(hipFree(ptr)); });
 }
 
-inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
-                                                      std::size_t size,
-                                                      char* data) {
-  int device;
-  CHECK_HIP_CALL(hipGetDevice(&device));
+inline void device_copy_data(char* address, char* data, std::size_t size) {
+  CHECK_HIP_CALL(hipMemcpy(address, data, size, hipMemcpyHostToDevice));
+}
 
-  void* real_address = nullptr;
-
+inline std::size_t device_allocation_granularity() {
   hipMemAllocationProp prop = {};
   prop.type                 = hipMemAllocationTypePinned;
   prop.location.type        = hipMemLocationTypeDevice;
@@ -34,41 +31,33 @@ inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
   CHECK_HIP_CALL(hipMemGetAllocationGranularity(
       &granularity, &prop, hipMemAllocationGranularityMinimum));
 
-  // Compute the starting address of the virtual memory range, so that the
-  // address is a multiple of the granularity and the range contains the
-  // original memory range we want to load.
-  void* starting_address = reinterpret_cast<void*>(
-      (reinterpret_cast<std::uintptr_t>(target_address) / granularity) *
-      granularity);
-  void* ending_address = reinterpret_cast<char*>(target_address) + size;
-  std::size_t virtual_range_size =
-      ((reinterpret_cast<std::uintptr_t>(ending_address) -
-        reinterpret_cast<std::uintptr_t>(starting_address) + granularity - 1) /
-       granularity) *
-      granularity;
+  return granularity;
+}
+
+inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
+                                                      std::size_t size) {
+  int device;
+  CHECK_HIP_CALL(hipGetDevice(&device));
 
   // Allocate physical memory
   hipMemGenericAllocationHandle_t allocHandle;
-  CHECK_HIP_CALL(hipMemCreate(&allocHandle, virtual_range_size, &prop, 0));
+  CHECK_HIP_CALL(hipMemCreate(&allocHandle, size, &prop, 0));
 
-  CHECK_HIP_CALL(hipMemAddressReserve(&real_address, virtual_range_size, 64,
-                                      starting_address, 0));
+  void* real_address = nullptr;
   CHECK_HIP_CALL(
-      hipMemMap(real_address, virtual_range_size, 0, allocHandle, 0));
+      hipMemAddressReserve(&real_address, size, 64, target_address, 0));
+  CHECK_HIP_CALL(hipMemMap(real_address, size, 0, allocHandle, 0));
 
   // Make the address range accessible on device
   hipMemAccessDesc accessDesc = {};
   accessDesc.location.type    = hipMemLocationTypeDevice;
   accessDesc.location.id      = device;
   accessDesc.flags            = hipMemAccessFlagsProtReadWrite;
-  CHECK_HIP_CALL(
-      hipMemSetAccess(real_address, virtual_range_size, &accessDesc, 1));
+  CHECK_HIP_CALL(hipMemSetAccess(real_address, size, &accessDesc, 1));
 
   CHECK_HIP_CALL(hipMemRelease(allocHandle));
-  CHECK_HIP_CALL(hipMemcpy(reinterpret_cast<void*>(target_address), data, size,
-                           hipMemcpyHostToDevice));
 
-  return std::make_tuple(real_address, virtual_range_size);
+  return std::make_tuple(real_address, size);
 }
 
 inline void device_deallocate(void* address, std::size_t size) {

@@ -5,10 +5,9 @@
 #include <Kokkos_Core.hpp>
 #include <cerrno>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <tuple>
-
-#include "memory_space_type.hpp"
 
 namespace cexa::kernel_replayer::impl {
 
@@ -18,17 +17,17 @@ inline auto regular_host_allocate(std::size_t size, char* data) {
   return std::unique_ptr<void, void (*)(void*)>(ptr, std::free);
 }
 
-inline std::tuple<void*, std::size_t> host_allocate(void* target_address,
-                                                    std::size_t size,
-                                                    char* data) {
-  static const int page_size = getpagesize();
+inline std::size_t host_allocation_granularity() { return getpagesize(); }
 
-  const std::size_t requested_size = size;
+inline void host_copy_data(char* address, char* data, std::size_t size) {
+  std::memcpy(address, data, size);
+}
 
-  char* aligned_address = reinterpret_cast<char*>(
-      ((reinterpret_cast<std::uintptr_t>(target_address)) / page_size) *
-      page_size);
-  size += reinterpret_cast<char*>(target_address) - aligned_address;
+inline std::tuple<void*, std::size_t> host_allocate(void* aligned_address,
+                                                    std::size_t size) {
+  assert(reinterpret_cast<std::uintptr_t>(aligned_address) %
+             host_allocation_granularity() ==
+         0);
 
   void* address =
       mmap(aligned_address, size, PROT_READ | PROT_WRITE,
@@ -52,8 +51,6 @@ inline std::tuple<void*, std::size_t> host_allocate(void* target_address,
     munmap(address, size);
     throw std::runtime_error("Failed to allocate to a predefined host address");
   }
-
-  memcpy(target_address, data, requested_size);
 
   return std::make_tuple(address, size);
 }

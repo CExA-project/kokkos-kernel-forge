@@ -17,20 +17,22 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
 
 class ScopeGuard {
  private:
-  std::unordered_map<std::string, impl::Allocation> host_allocations;
+  std::vector<impl::Allocation> host_raw_allocations;
+  std::unordered_map<std::string, void*> host_allocations;
   std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>
       host_output_allocations;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
-  std::unordered_map<std::string, impl::Allocation> device_allocations;
+  std::vector<impl::Allocation> device_raw_allocations;
+  std::unordered_map<std::string, void*> device_allocations;
   std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>
       device_output_allocations;
 #endif
 
-  void allocate(std::string label, std::string_view memory_space, char* address,
-                char* data, std::size_t size);
-
-  void allocate(std::string label, std::string_view memory_space, char* data,
+  void allocate(impl::MemorySpaceType memory_space, char* address,
                 std::size_t size);
+
+  void allocate_output(std::string label, std::string_view memory_space,
+                       char* data, std::size_t size);
 
  public:
   ScopeGuard(int& argc, char* argv[]);
