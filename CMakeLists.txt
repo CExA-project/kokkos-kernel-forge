@@ -14,6 +14,8 @@ find_package(HDF5 REQUIRED COMPONENTS C HL)
 
 add_subdirectory(src)
 
+include(CTest)
+
 if(KKF_BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif()

@@ -8,7 +8,7 @@ int main(int argc, char* argv[]) {
   const int N = 1024;
   Kokkos::View<int*> A("A", N);
   Kokkos::View<int*> B("B", N);
-  Kokkos::View<int*> C("B", N);
+  Kokkos::View<int*> C("C", N);
   Kokkos::parallel_for(
       "init", N, KOKKOS_LAMBDA(int i) {
         A(i) = i;

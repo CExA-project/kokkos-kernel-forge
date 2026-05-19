@@ -1,5 +1,4 @@
 enable_testing()
-include(CTest)
 
 set(TEST_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/launcher.sh")
 

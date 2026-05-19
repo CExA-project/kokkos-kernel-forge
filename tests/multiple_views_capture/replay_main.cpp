@@ -9,7 +9,7 @@ int main(int argc, char* argv[]) {
   const int N = 1024;
   Kokkos::View<int*> A("A", 1);
   Kokkos::View<int*> B("B", 1);
-  Kokkos::View<int*> C("B", 1);
+  Kokkos::View<int*> C("C", 1);
   // Kokkos::parallel_for(
   //     "init", N, KOKKOS_LAMBDA(int i) {
   //       A(i) = i;
@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_C);
 
   void* ref_C_alloc =
-      cexa::kernel_replayer::get_out_allocation<device_space>("values");
+      cexa::kernel_replayer::get_out_allocation<device_space>("C");
   Kokkos::View<int*, Kokkos::MemoryUnmanaged> ref_C(
       static_cast<int*>(ref_C_alloc), N);
 
