@@ -15,17 +15,16 @@ int main(int argc, char* argv[]) {
   //     "fill_values", Kokkos::RangePolicy<>(0, number_of_values),
   //     KOKKOS_LAMBDA(const int i) { values(i) = i; });
 
-  int factor   = 0;
-  auto functor = KOKKOS_LAMBDA(const int i, int& partial_sum) {
-    partial_sum += values(i) * factor;
-  };
-
-  std::unique_ptr replay_functor = cexa::kernel_replayer::get_functor(functor);
+  int factor = 0;
 
   int sum = 0;
   Kokkos::parallel_reduce("sum_values",
                           Kokkos::RangePolicy<>(0, number_of_values),
-                          *replay_functor, sum);
+                          cexa::kernel_replayer::replay_functor(
+                              KOKKOS_LAMBDA(const int i, int& partial_sum) {
+                                partial_sum += values(i) * factor;
+                              }),
+                          sum);
 
   constexpr int expected_sum =
       2 * number_of_values * (number_of_values - 1) / 2;

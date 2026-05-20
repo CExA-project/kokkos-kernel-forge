@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
   int sum = 0;
   Kokkos::parallel_reduce("sum_values",
                           Kokkos::RangePolicy<>(0, number_of_values),
-                          cexa::kernel_replayer::extract_functor(
+                          cexa::kernel_replayer::replay_functor(
                               KOKKOS_LAMBDA(const int i, int& partial_sum) {
                                 partial_sum += values(i) * factor;
                               }),

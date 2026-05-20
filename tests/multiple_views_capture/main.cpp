@@ -16,12 +16,11 @@ int main(int argc, char* argv[]) {
       });
 
   Kokkos::parallel_for("test_kernel", N,
-                       cexa::kernel_replayer::extract_functor(
+                       cexa::kernel_replayer::replay_functor(
                            KOKKOS_LAMBDA(int i) { C(i) = A(i) + B(i); }));
   Kokkos::fence();
 
-  auto h_values =
-      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), C);
+  auto h_values = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), C);
   Kokkos::printf("C(5) = %d\n", h_values(5));
 
   return 0;

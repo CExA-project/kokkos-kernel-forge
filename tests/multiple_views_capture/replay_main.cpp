@@ -16,10 +16,9 @@ int main(int argc, char* argv[]) {
   //       B(i) = i % 32;
   // });
 
-  auto functor        = KOKKOS_LAMBDA(int i) { C(i) = A(i) + B(i); };
-  auto replay_functor = cexa::kernel_replayer::get_functor(functor);
-
-  Kokkos::parallel_for("test_kernel", N, *replay_functor);
+  Kokkos::parallel_for("test_kernel", N,
+                       cexa::kernel_replayer::replay_functor(
+                           KOKKOS_LAMBDA(int i) { C(i) = A(i) + B(i); }));
   Kokkos::fence();
 
   using device_space = Kokkos::DefaultExecutionSpace::memory_space;

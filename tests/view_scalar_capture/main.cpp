@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
 
   int factor = 3;
   Kokkos::parallel_for("test_kernel", N,
-                       cexa::kernel_replayer::extract_functor(
+                       cexa::kernel_replayer::replay_functor(
                            KOKKOS_LAMBDA(int i) { values(i) *= factor; }));
   Kokkos::fence();
 

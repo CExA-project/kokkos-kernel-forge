@@ -11,10 +11,9 @@ int main(int argc, char* argv[]) {
   // Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  auto functor        = KOKKOS_LAMBDA(int i) { values(i) *= 2; };
-  auto replay_functor = cexa::kernel_replayer::get_functor(functor);
-
-  Kokkos::parallel_for("test_kernel", N, *replay_functor);
+  Kokkos::parallel_for("test_kernel", N,
+                       cexa::kernel_replayer::replay_functor(
+                           KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
   Kokkos::fence();
 
   using device_space = Kokkos::DefaultExecutionSpace::memory_space;

@@ -7,7 +7,7 @@ int main(int argc, char* argv[]) {
 
   Kokkos::parallel_for(
       "test_kernel", 1,
-      cexa::kernel_replayer::extract_functor(
+      cexa::kernel_replayer::replay_functor(
           KOKKOS_LAMBDA(int) { Kokkos::printf("Hello from the kernel!\n"); }));
   Kokkos::fence();
 

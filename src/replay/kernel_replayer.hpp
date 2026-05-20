@@ -54,28 +54,36 @@ void* get_out_allocation(const std::string& label) {
 }
 
 template <class Functor>
-auto get_functor(const Functor& functor) {
+Functor replay_functor(const Functor& functor) {
   constexpr int N = sizeof(Functor);
 
-  // We create a temporary copy of the functor using placement new and the copy
-  // constructor, as lambdas with a capture don't have a default contructor or
-  // assignment operators. We then copy the data of the extracted functor into
-  // it.
-  void* tmp_buffer = std::aligned_alloc(alignof(Functor), N);
+  // In order to revive the to-be-replayed functor, we:
+  // - Create a temporary functor and copy construct it from an existing
+  //   functor (we have to use the copy constructor since its the only valid
+  //   method to construct a lambda)
+  // - Save the binary representation of this temporary functor
+  // - memcpy the target functor into the temporary functor's memory
+  // - Copy construct a new functor f from the patched temporary functor, since
+  //   tracking is disabled, if the target functor contained Views, we won't get
+  //   a segfault once they are destroyed
+  // - memcpy the old data of the temporary functor back and properly destroy it
+  // - return f
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
-  Functor* tmp_functor = new (tmp_buffer) Functor(functor);
-  impl::init_functor(static_cast<char*>(tmp_buffer), N);
 
-  // We create a copy of the extracted functor with allocation tracking
-  // disabled, so that when the destructors of views contained in the extracted
-  // funcor are called, we won't get a segfault.
-  void* buffer         = std::aligned_alloc(alignof(Functor), N);
-  Functor* new_functor = new (buffer) Functor(*tmp_functor);
-  Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
+  void* tmp_buffer         = std::aligned_alloc(alignof(Functor), N);
+  Functor* tmp_functor     = new (tmp_buffer) Functor(functor);
+  void* tmp_functor_buffer = std::malloc(N);
+  std::memcpy(tmp_functor_buffer, tmp_buffer, N);
+
+  impl::init_functor(static_cast<char*>(tmp_buffer), N);
+  Functor f(*tmp_functor);
+
+  std::memcpy(tmp_buffer, tmp_functor_buffer, N);
+  tmp_functor->~Functor();
   std::free(tmp_buffer);
 
-  return std::unique_ptr<Functor, decltype([](Functor* ptr) {
-                           std::free(ptr);
-                         })>(new_functor);
+  Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
+
+  return f;
 }
 }  // namespace cexa::kernel_replayer

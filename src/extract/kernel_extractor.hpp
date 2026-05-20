@@ -10,7 +10,7 @@ namespace cexa::kernel_replayer {
  * replayer can use it later
  */
 template <class Functor>
-Functor extract_functor(Functor&& functor) {
+Functor replay_functor(Functor&& functor) {
   static std::optional<Kokkos::View<unsigned char*, Kokkos::HostSpace>>
       functor_data;
   if (!functor_data.has_value()) {
