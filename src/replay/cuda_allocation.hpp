@@ -51,6 +51,9 @@ inline void device_copy_data(char* address, char* data, std::size_t size) {
 }
 
 inline std::size_t device_allocation_granularity() {
+  CUdevice device;
+  CHECK_CUDA_CALL(cuCtxGetDevice(&device));
+
   CUmemAllocationHandleType handleType =
       CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
   CUmemAllocationProp prop  = {};
@@ -75,6 +78,14 @@ inline std::tuple<void*, std::size_t> device_allocate(void* address,
   CHECK_CUDA_CALL(cuCtxGetDevice(&device));
 
   // Allocate physical memory
+  CUmemAllocationHandleType handleType =
+      CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR;
+  CUmemAllocationProp prop  = {};
+  prop.type                 = CU_MEM_ALLOCATION_TYPE_PINNED;
+  prop.location.type        = CU_MEM_LOCATION_TYPE_DEVICE;
+  prop.location.id          = device;
+  prop.requestedHandleTypes = handleType;
+
   CUmemGenericAllocationHandle allocHandle;
   CHECK_CUDA_CALL(cuMemCreate(&allocHandle, size, &prop, 0));
 

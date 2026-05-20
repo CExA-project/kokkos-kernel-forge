@@ -22,6 +22,9 @@ inline void device_copy_data(char* address, char* data, std::size_t size) {
 }
 
 inline std::size_t device_allocation_granularity() {
+  int device;
+  CHECK_HIP_CALL(hipGetDevice(&device));
+
   hipMemAllocationProp prop = {};
   prop.type                 = hipMemAllocationTypePinned;
   prop.location.type        = hipMemLocationTypeDevice;
@@ -40,6 +43,11 @@ inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
   CHECK_HIP_CALL(hipGetDevice(&device));
 
   // Allocate physical memory
+  hipMemAllocationProp prop = {};
+  prop.type                 = hipMemAllocationTypePinned;
+  prop.location.type        = hipMemLocationTypeDevice;
+  prop.location.id          = device;
+
   hipMemGenericAllocationHandle_t allocHandle;
   CHECK_HIP_CALL(hipMemCreate(&allocHandle, size, &prop, 0));
 
