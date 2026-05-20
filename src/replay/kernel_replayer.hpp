@@ -97,7 +97,14 @@ Functor replay_functor(const Functor& functor) {
   void* tmp_functor_buffer = std::malloc(N);
   std::memcpy(tmp_functor_buffer, tmp_buffer, N);
 
-  impl::init_functor(static_cast<char*>(tmp_buffer), N);
+  std::size_t copy_length = N;
+#if defined(KOKKOS_COMPILER_NVCC)
+  // extended lambdas on nvcc also have a "data" pointer
+  if constexpr (__nv_is_extended_host_device_lambda_closure_type(Functor)) {
+    copy_length -= sizeof(void*);
+  }
+#endif
+  impl::init_functor(static_cast<char*>(tmp_buffer), copy_length);
   Functor f(*tmp_functor);
 
   std::memcpy(tmp_buffer, tmp_functor_buffer, N);

@@ -139,12 +139,7 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
 }
 
 void init_functor(char* buffer, std::size_t size) {
-  std::size_t N = size;
-#if defined(KOKKOS_ENABLE_CUDA)
-  // functors on nvcc also have a "data" pointer
-  N -= sizeof(void*);
-#endif
-  std::memcpy(buffer, functor_data->data(), N);
+  std::memcpy(buffer, functor_data->data(), size);
 }
 
 char* allocate_host_buffer(std::size_t size, MemorySpaceType mem) {
