@@ -53,6 +53,28 @@ void* get_out_allocation(const std::string& label) {
       impl::memory_space_type_from_string(MemorySpace::name()), label);
 }
 
+template <class DataType, class... Properties, class... ViewCtorArgs>
+auto get_view(const std::string& label, ViewCtorArgs... ctor_args) {
+  using ViewType          = Kokkos::View<DataType, Properties...>;
+  using value_type        = typename ViewType::value_type;
+  using memory_space_type = typename ViewType::memory_space;
+
+  value_type* data =
+      static_cast<value_type*>(get_allocation<memory_space_type>(label));
+  return ViewType(data, ctor_args...);
+}
+
+template <class DataType, class... Properties, class... ViewCtorArgs>
+auto get_out_view(const std::string& label, ViewCtorArgs... ctor_args) {
+  using ViewType          = Kokkos::View<DataType, Properties...>;
+  using value_type        = typename ViewType::value_type;
+  using memory_space_type = typename ViewType::memory_space;
+
+  value_type* data =
+      static_cast<value_type*>(get_out_allocation<memory_space_type>(label));
+  return ViewType(data, ctor_args...);
+}
+
 template <class Functor>
 Functor replay_functor(const Functor& functor) {
   constexpr int N = sizeof(Functor);

@@ -21,20 +21,11 @@ int main(int argc, char* argv[]) {
                            KOKKOS_LAMBDA(int i) { C(i) = A(i) + B(i); }));
   Kokkos::fence();
 
-  using device_space = Kokkos::DefaultExecutionSpace::memory_space;
-  void* replay_C_alloc =
-      cexa::kernel_replayer::get_allocation<device_space>("C");
-  Kokkos::View<int*, Kokkos::MemoryUnmanaged> replay_C(
-      static_cast<int*>(replay_C_alloc), N);
-
+  auto replay_C = cexa::kernel_replayer::get_view<int*>("C", N);
   auto h_replay_C =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_C);
 
-  void* ref_C_alloc =
-      cexa::kernel_replayer::get_out_allocation<device_space>("C");
-  Kokkos::View<int*, Kokkos::MemoryUnmanaged> ref_C(
-      static_cast<int*>(ref_C_alloc), N);
-
+  auto ref_C = cexa::kernel_replayer::get_out_view<int*>("C", N);
   auto h_ref_C =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), ref_C);
 

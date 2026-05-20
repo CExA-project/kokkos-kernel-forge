@@ -17,20 +17,11 @@ int main(int argc, char* argv[]) {
                            KOKKOS_LAMBDA(int i) { values(i) *= factor; }));
   Kokkos::fence();
 
-  using device_space = Kokkos::DefaultExecutionSpace::memory_space;
-  void* replay_values_alloc =
-      cexa::kernel_replayer::get_allocation<device_space>("values");
-  Kokkos::View<int*, Kokkos::MemoryUnmanaged> replay_values(
-      static_cast<int*>(replay_values_alloc), N);
-
+  auto replay_values = cexa::kernel_replayer::get_view<int*>("values", N);
   auto h_replay_values =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_values);
 
-  void* ref_values_alloc =
-      cexa::kernel_replayer::get_out_allocation<device_space>("values");
-  Kokkos::View<int*, Kokkos::MemoryUnmanaged> ref_values(
-      static_cast<int*>(ref_values_alloc), N);
-
+  auto ref_values = cexa::kernel_replayer::get_out_view<int*>("values", N);
   auto h_ref_values =
       Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), ref_values);
 
