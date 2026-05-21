@@ -18,7 +18,7 @@
 void remove_cli_args(int& argc, char* argv[], int pos, int n) {
   if (pos + n < argc) {
     for (int i = pos; i < argc - n; i++) {
-      std::swap(argv[pos], argv[pos + n]);
+      std::swap(argv[i], argv[i + n]);
     }
   }
   argc -= n;
@@ -416,15 +416,13 @@ ScopeGuard::~ScopeGuard() {}
 void ScopeGuard::allocate(impl::MemorySpaceType memory_space, char* address,
                           std::size_t size) {
   if (memory_space == impl::MemorySpaceType::HOST) {
-    host_raw_allocations.emplace_back(impl::MemorySpaceType::HOST, address,
-                                      size);
+    host_raw_allocations.emplace_back(memory_space, address, size);
   } else {
 #if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
     throw std::runtime_error(
         "Trying to access device allocations but no device space is enabled");
 #else
-    device_raw_allocations.emplace_back(impl::MemorySpaceType::HOST, address,
-                                        size);
+    device_raw_allocations.emplace_back(memory_space, address, size);
 #endif
   }
 }
