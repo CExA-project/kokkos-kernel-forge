@@ -1,6 +1,0 @@
-[submodule "external/kokkos"]
-	path = external/kokkos
-	url = https://github.com/kokkos/kokkos.git
-[submodule "external/hdf5"]
-	path = external/hdf5
-	url = https://github.com/HDFGroup/hdf5.git
