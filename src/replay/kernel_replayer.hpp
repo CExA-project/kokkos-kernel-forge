@@ -13,6 +13,14 @@ void* get_allocation(impl::MemorySpaceType memory_space,
                      const std::string& label);
 void* get_out_allocation(impl::MemorySpaceType memory_space,
                          const std::string& label);
+
+template <class T>
+struct add_unmanaged_trait;
+
+template <unsigned int N>
+struct add_unmanaged_trait<Kokkos::MemoryTraits<N>> {
+  using type = Kokkos::MemoryTraits<N | Kokkos::Unmanaged>;
+};
 }  // namespace impl
 
 class ScopeGuard {
@@ -53,26 +61,26 @@ void* get_out_allocation(const std::string& label) {
       impl::memory_space_type_from_string(MemorySpace::name()), label);
 }
 
-template <class DataType, class... Properties, class... ViewCtorArgs>
-auto get_view(const std::string& label, ViewCtorArgs... ctor_args) {
-  using ViewType          = Kokkos::View<DataType, Properties...>;
-  using value_type        = typename ViewType::value_type;
-  using memory_space_type = typename ViewType::memory_space;
+template <class View, class Functor, class Tuple>
+void compare_views(View const& view, Tuple args, Functor&& f) {
+  using memory_space = View::memory_space;
+  using value_type   = View::value_type;
 
-  value_type* data =
-      static_cast<value_type*>(get_allocation<memory_space_type>(label));
-  return ViewType(data, ctor_args...);
-}
+  value_type* in_data = static_cast<value_type*>(
+      cexa::kernel_replayer::get_allocation<memory_space>(view.label()));
+  value_type* out_data = static_cast<value_type*>(
+      cexa::kernel_replayer::get_out_allocation<memory_space>(view.label()));
 
-template <class DataType, class... Properties, class... ViewCtorArgs>
-auto get_out_view(const std::string& label, ViewCtorArgs... ctor_args) {
-  using ViewType          = Kokkos::View<DataType, Properties...>;
-  using value_type        = typename ViewType::value_type;
-  using memory_space_type = typename ViewType::memory_space;
+  using ViewType = Kokkos::View<
+      typename View::data_type, typename View::array_layout, memory_space,
+      typename impl::add_unmanaged_trait<typename View::memory_traits>::type>;
 
-  value_type* data =
-      static_cast<value_type*>(get_out_allocation<memory_space_type>(label));
-  return ViewType(data, ctor_args...);
+  ViewType expected = std::make_from_tuple<ViewType>(
+      std::tuple_cat(std::forward_as_tuple(in_data), args));
+  ViewType actual = std::make_from_tuple<ViewType>(
+      std::tuple_cat(std::forward_as_tuple(out_data), args));
+
+  f(expected, actual);
 }
 
 template <class Functor>

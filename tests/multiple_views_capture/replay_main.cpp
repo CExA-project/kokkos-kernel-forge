@@ -21,23 +21,24 @@ int main(int argc, char* argv[]) {
                            KOKKOS_LAMBDA(int i) { C(i) = A(i) + B(i); }));
   Kokkos::fence();
 
-  auto replay_C = cexa::kernel_replayer::get_view<int*>("C", N);
-  auto h_replay_C =
-      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_C);
+  // auto h_C = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), C);
+  // Kokkos::printf("C(5) = %d\n", h_C(5));
 
-  auto ref_C = cexa::kernel_replayer::get_out_view<int*>("C", N);
-  auto h_ref_C =
-      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), ref_C);
+  cexa::kernel_replayer::compare_views(
+      C, std::make_tuple(1024), [](auto ref_C, auto replay_C) {
+        auto h_replay_C =
+            Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_C);
+        auto h_ref_C =
+            Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), ref_C);
 
-  for (int i = 0; i < N; i++) {
-    if (h_replay_C(i) != h_ref_C(i)) {
-      Kokkos::printf("At index %d, expected %d but got %d\n", i, h_ref_C(i),
-                     h_replay_C(i));
-      return 1;
-    }
-  }
-
-  Kokkos::printf("values(5) = %d\n", h_replay_C(5));
+        for (int i = 0; i < N; i++) {
+          if (h_replay_C(i) != h_ref_C(i)) {
+            Kokkos::printf("At index %d, expected %d but got %d\n", i,
+                           h_ref_C(i), h_replay_C(i));
+            std::exit(1);
+          }
+        }
+      });
 
   return 0;
 }
