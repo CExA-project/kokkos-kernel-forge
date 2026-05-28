@@ -18,7 +18,9 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <cstdint>
+#include <optional>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -45,17 +47,23 @@ std::mutex state_mutex;
 struct KernelState {
   std::string label;
   std::uint32_t device_id;
+  std::uint64_t invocation;
+  bool dump_views;
 };
 
 std::unordered_map<std::uint64_t, KernelState> kernel_states;
+std::unordered_map<std::string, std::uint64_t> kernel_invocations;
 Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
 kkf::AllocationTracker allocation_tracker;
 
 std::string dump_kernel_label;
+std::optional<std::uint64_t> dump_kernel_invocation = 1;
 
 constexpr std::string_view dump_kernel_label_option =
     "--kkf-dump-kernel-label=";
+constexpr std::string_view dump_kernel_invocation_option =
+    "--kkf-dump-kernel-invocation=";
 
 std::string label_or_unknown(const char* label) {
   return label != nullptr ? label : "<unknown>";
@@ -99,19 +107,39 @@ bool should_dump_views_for_label(std::string_view label) {
   return !dump_kernel_label.empty() && label == dump_kernel_label;
 }
 
+bool should_dump_views_for_invocation(std::string_view label,
+                                      const std::uint64_t invocation) {
+  return dump_kernel_invocation.has_value() &&
+         should_dump_views_for_label(label) &&
+         invocation == dump_kernel_invocation.value();
+}
+
+std::optional<std::uint64_t> parse_positive_uint64(std::string_view value) {
+  std::uint64_t parsed    = 0;
+  const auto* const begin = value.begin();
+  const auto* const end   = value.end();
+  const auto result       = std::from_chars(begin, end, parsed);
+  if (result.ec != std::errc{} || result.ptr != end || parsed == 0) {
+    return std::nullopt;
+  }
+  return parsed;
+}
+
 void dump_views(const char* phase, const std::string& label,
-                std::uint64_t kernel_id) {
+                const std::uint64_t kernel_id, const std::uint64_t invocation) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
   const kkf::ViewDumpResult result =
-      kkf::dump_view_snapshot(snapshot, phase, label, kernel_id);
+      kkf::dump_view_snapshot(snapshot, phase, label, kernel_id, invocation);
   if (!result.ok) {
     log_line("view_dump_failed phase=", phase, " kernel_label=\"", label,
-             "\" id=", kernel_id, " file=\"", result.filename, "\"");
+             "\" id=", kernel_id, " invocation=", invocation, " file=\"",
+             result.filename, "\"");
     return;
   }
 
   log_line("view_dump phase=", phase, " kernel_label=\"", label,
-           "\" id=", kernel_id, " file=\"", result.filename,
+           "\" id=", kernel_id, " invocation=", invocation, " file=\"",
+           result.filename,
            "\" active_allocations=", snapshot.allocations.size(),
            " active_bytes=", snapshot.active_bytes);
 }
@@ -129,6 +157,8 @@ void begin_kernel(const char* hook_name, const char* label,
                   const std::uint32_t device_id, std::uint64_t* kernel_id) {
   const std::uint64_t id         = next_kernel_id.fetch_add(1);
   const std::string kernel_label = label_or_unknown(label);
+  std::uint64_t invocation       = 0;
+  bool dump_this_kernel          = false;
 
   if (kernel_id != nullptr) {
     *kernel_id = id;
@@ -136,10 +166,13 @@ void begin_kernel(const char* hook_name, const char* label,
 
   {
     std::lock_guard<std::mutex> lock(state_mutex);
-    kernel_states[id] = {kernel_label, device_id};
+    invocation = ++kernel_invocations[kernel_label];
+    dump_this_kernel =
+        should_dump_views_for_invocation(kernel_label, invocation);
+    kernel_states[id] = {kernel_label, device_id, invocation, dump_this_kernel};
   }
 
-  if (should_dump_views_for_label(kernel_label)) {
+  if (dump_this_kernel) {
     Kokkos_Tools_toolInvokedFenceFunction fence = nullptr;
     {
       std::lock_guard<std::mutex> lock(state_mutex);
@@ -148,26 +181,30 @@ void begin_kernel(const char* hook_name, const char* label,
     if (fence != nullptr) {
       fence(device_id);
     }
-    dump_views("in", kernel_label, id);
+    dump_views("in", kernel_label, id, invocation);
   }
 
   if (is_user_label(label)) {
     log_line(hook_name, " label=\"", kernel_label, "\" device=", device_id,
-             " id=", id);
+             " id=", id, " invocation=", invocation);
   }
 }
 
 void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
   std::string label                           = "<unknown>";
   std::uint32_t device_id                     = 0;
+  std::uint64_t invocation                    = 0;
+  bool dump_this_kernel                       = false;
   Kokkos_Tools_toolInvokedFenceFunction fence = nullptr;
   {
     std::lock_guard<std::mutex> lock(state_mutex);
     fence   = tool_fence;
     auto it = kernel_states.find(kernel_id);
     if (it != kernel_states.end()) {
-      label     = it->second.label;
-      device_id = it->second.device_id;
+      label            = it->second.label;
+      device_id        = it->second.device_id;
+      invocation       = it->second.invocation;
+      dump_this_kernel = it->second.dump_views;
       kernel_states.erase(it);
     }
   }
@@ -176,12 +213,13 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
     fence(device_id);
   }
 
-  if (should_dump_views_for_label(label)) {
-    dump_views("out", label, kernel_id);
+  if (dump_this_kernel) {
+    dump_views("out", label, kernel_id, invocation);
   }
 
   if (is_user_label(label.c_str())) {
-    log_line(hook_name, " label=\"", label, "\" id=", kernel_id);
+    log_line(hook_name, " label=\"", label, "\" id=", kernel_id,
+             " invocation=", invocation);
   }
 }
 
@@ -227,6 +265,14 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
     if (argument.starts_with(dump_kernel_label_option)) {
       dump_kernel_label =
           std::string(argument.substr(dump_kernel_label_option.size()));
+    } else if (argument.starts_with(dump_kernel_invocation_option)) {
+      const std::string_view value =
+          argument.substr(dump_kernel_invocation_option.size());
+      dump_kernel_invocation = parse_positive_uint64(value);
+      if (!dump_kernel_invocation.has_value()) {
+        log_line("invalid ", dump_kernel_invocation_option, " value=\"", value,
+                 "\"; expected a positive integer");
+      }
     }
   }
 }

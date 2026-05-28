@@ -164,7 +164,8 @@ void write_allocation_group(hid_t views_group,
 ViewDumpResult dump_view_snapshot(const AllocationSnapshot& snapshot,
                                   std::string_view phase,
                                   std::string_view label,
-                                  std::uint64_t kernel_id) {
+                                  std::uint64_t kernel_id,
+                                  std::uint64_t kernel_invocation) {
   ViewDumpResult result;
   result.filename = dump_filename(label, kernel_id, phase);
 
@@ -178,6 +179,7 @@ ViewDumpResult dump_view_snapshot(const AllocationSnapshot& snapshot,
   write_string_attribute(file, "phase", phase);
   write_string_attribute(file, "kernel_label", label);
   write_uint64_attribute(file, "kernel_id", kernel_id);
+  write_uint64_attribute(file, "kernel_invocation", kernel_invocation);
   write_uint64_attribute(file, "active_allocations",
                          snapshot.allocations.size());
   write_uint64_attribute(file, "active_bytes", snapshot.active_bytes);

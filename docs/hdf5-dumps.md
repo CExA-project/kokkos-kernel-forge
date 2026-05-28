@@ -21,6 +21,7 @@ The dump stores:
 phase              # "in" before the kernel runs, "out" after it completes
 kernel_label       # Kokkos label of the matched kernel
 kernel_id          # tool-local id assigned to this kernel invocation
+kernel_invocation  # allow dumping a specific kernel invocation
 active_allocations # tracked user allocations alive at dump time
 active_bytes       # total size, in bytes, of those active allocations
 ```
