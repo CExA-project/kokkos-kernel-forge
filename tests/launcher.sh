@@ -44,4 +44,3 @@ grep -vF "[kokkos-hooks]" "$REFERENCE_OUTPUT" > "$CLEAN_REFERENCE_OUTPUT"
 if ! diff "$CLEAN_REFERENCE_OUTPUT" "$REPLAY_OUTPUT"; then
   clean_exit 1
 fi
-

@@ -175,7 +175,8 @@ void check_hdf5_call(herr_t status, const char* expr, const char* file,
   }
 
   std::stringstream os;
-  os << file << ":" << line << ": " << "The call " << expr << " failed";
+  os << file << ":" << line << ": "
+     << "The call " << expr << " failed";
   throw std::runtime_error(os.str());
 }
 
