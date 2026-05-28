@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -50,7 +51,7 @@ inline void device_copy_data(char* address, char* data, std::size_t size) {
       cudaMemcpy(address, data, size, cudaMemcpyHostToDevice));
 }
 
-inline std::size_t device_allocation_granularity() {
+inline std::size_t device_allocation_granularity(std::size_t) {
   CUdevice device;
   CHECK_CUDA_CALL(cuCtxGetDevice(&device));
 
@@ -72,8 +73,8 @@ inline std::size_t device_allocation_granularity() {
   return granularity;
 }
 
-inline std::tuple<void*, std::size_t> device_allocate(void* address,
-                                                      std::size_t size) {
+inline std::tuple<void*, std::size_t, std::any> device_allocate(
+    void* address, std::size_t size) {
   CUdevice device;
   CHECK_CUDA_CALL(cuCtxGetDevice(&device));
 
@@ -109,7 +110,8 @@ inline std::tuple<void*, std::size_t> device_allocate(void* address,
 
   CHECK_CUDA_CALL(cuMemRelease(allocHandle));
 
-  return std::make_tuple(reinterpret_cast<void*>(real_address), size);
+  return std::make_tuple(reinterpret_cast<void*>(real_address), size,
+                         std::any{});
 }
 
 inline void device_deallocate(void* address, std::size_t size) {

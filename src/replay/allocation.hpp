@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <string>
 #include <tuple>
 
@@ -12,6 +13,9 @@
 #elif defined(KOKKOS_ENABLE_HIP)
 #define KERNEL_REPLAYER_HAS_DEVICE_SPACE
 #include "hip_allocation.hpp"
+#elif defined(KOKKOS_ENABLE_SYCL)
+#define KERNEL_REPLAYER_HAS_DEVICE_SPACE
+#include "sycl_allocation.hpp"
 #elif defined(KOKKOS_ENABLE_SYCL) || defined(KOKKOS_ENABLE_OPENACC) || \
     defined(KOKKOS_ENABLE_NEXTSILICON)
 #define KERNEL_REPLAYER_HAS_UNSUPPORTED_DEVICE_SPACE
@@ -23,10 +27,10 @@ inline std::pair<char*, std::size_t> get_allocation_address(
     void* target_address, std::size_t size, MemorySpaceType space) {
   std::size_t granularity;
   if (space == MemorySpaceType::HOST) {
-    granularity = host_allocation_granularity();
+    granularity = host_allocation_granularity(size);
   } else {
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
-    granularity = device_allocation_granularity();
+    granularity = device_allocation_granularity(size);
 #else
     throw std::runtime_error(
         "Tried to compute a device allocation address but no device space is "
@@ -62,6 +66,7 @@ inline void copy_data(MemorySpaceType space, char* address, char* data,
 struct Allocation {
   void* address    = nullptr;
   std::size_t size = 0;
+  std::any data;
   MemorySpaceType memory_space;
 
   Allocation() = default;
@@ -73,7 +78,7 @@ struct Allocation {
       std::tie(address, size) = host_allocate(target_address, requested_size);
     } else {
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
-      std::tie(address, size) = device_allocate(target_address, requested_size);
+      std::tie(address, size, data) = device_allocate(target_address, requested_size);
 #elif defined(KERNEL_REPLAYER_HAS_UNSUPPORTED_DEVICE_SPACE)
       throw std::runtime_error(
           "Trying to allocate on an unsupported device space");
@@ -94,7 +99,7 @@ struct Allocation {
       host_deallocate(address, size);
     } else {
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
-      device_deallocate(address, size);
+      device_deallocate(address, size, data);
 #endif
     }
   }

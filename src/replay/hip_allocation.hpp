@@ -21,7 +21,7 @@ inline void device_copy_data(char* address, char* data, std::size_t size) {
   CHECK_HIP_CALL(hipMemcpy(address, data, size, hipMemcpyHostToDevice));
 }
 
-inline std::size_t device_allocation_granularity() {
+inline std::size_t device_allocation_granularity(std::size_t) {
   int device;
   CHECK_HIP_CALL(hipGetDevice(&device));
 
@@ -37,8 +37,8 @@ inline std::size_t device_allocation_granularity() {
   return granularity;
 }
 
-inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
-                                                      std::size_t size) {
+inline std::tuple<void*, std::size_t, std::any> device_allocate(
+    void* target_address, std::size_t size) {
   int device;
   CHECK_HIP_CALL(hipGetDevice(&device));
 
@@ -65,7 +65,7 @@ inline std::tuple<void*, std::size_t> device_allocate(void* target_address,
 
   CHECK_HIP_CALL(hipMemRelease(allocHandle));
 
-  return std::make_tuple(real_address, size);
+  return std::make_tuple(real_address, size, std::any{});
 }
 
 inline void device_deallocate(void* address, std::size_t size) {

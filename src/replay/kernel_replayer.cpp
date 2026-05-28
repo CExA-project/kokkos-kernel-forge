@@ -72,6 +72,10 @@ void device_init() {
   CHECK_HIP_CALL(hipDeviceGetAttribute(
       &device_supports_virtual_address,
       hipDeviceAttributeVirtualMemoryManagementSupported, hipDevice));
+#elif defined(KOKKOS_ENABLE_SYCL)
+  CHECK_SYCL_CALL(zeInit(0));
+  cexa::kernel_replayer::impl::level_zero_init();
+  device_supports_virtual_address = 1;
 #else
   device_supports_virtual_address = 1;
 #endif

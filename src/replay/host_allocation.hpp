@@ -17,7 +17,9 @@ inline auto regular_host_allocate(std::size_t size, char* data) {
   return std::unique_ptr<void, void (*)(void*)>(ptr, std::free);
 }
 
-inline std::size_t host_allocation_granularity() { return getpagesize(); }
+inline std::size_t host_allocation_granularity(std::size_t) {
+  return getpagesize();
+}
 
 inline void host_copy_data(char* address, char* data, std::size_t size) {
   std::memcpy(address, data, size);
@@ -26,7 +28,7 @@ inline void host_copy_data(char* address, char* data, std::size_t size) {
 inline std::tuple<void*, std::size_t> host_allocate(void* aligned_address,
                                                     std::size_t size) {
   assert(reinterpret_cast<std::uintptr_t>(aligned_address) %
-             host_allocation_granularity() ==
+             host_allocation_granularity(size) ==
          0);
 
   void* address =

@@ -9,6 +9,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(KKF_BUILD_EXAMPLES "Build kokkos-kernel-forge examples" ON)
 option(KKF_BUILD_TESTS "Build kokkos-kernel-forge tests" OFF)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)
 
