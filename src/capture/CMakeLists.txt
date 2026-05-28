@@ -1,9 +1,4 @@
-add_library(kkf_kokkos_hooks SHARED
-  allocation_tracker.cpp
-  memory_copy.cpp
-  view_dump.cpp
-  kokkos_hooks.cpp
-)
+add_library(kkf_kokkos_hooks SHARED allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp)
 target_compile_features(kkf_kokkos_hooks PRIVATE cxx_std_20)
 
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INCLUDE_DIRECTORIES)
@@ -38,7 +33,4 @@ if(Kokkos_ENABLE_HIP)
   endif()
 endif()
 
-set_target_properties(kkf_kokkos_hooks PROPERTIES
-  OUTPUT_NAME kkf
-  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
-)
+set_target_properties(kkf_kokkos_hooks PROPERTIES OUTPUT_NAME kkf LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
