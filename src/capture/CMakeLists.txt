@@ -1,0 +1,36 @@
+add_library(kkf_kokkos_hooks SHARED allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp)
+target_compile_features(kkf_kokkos_hooks PRIVATE cxx_std_20)
+
+get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INCLUDE_DIRECTORIES)
+if(NOT KOKKOS_INCLUDE_DIRS)
+  get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INTERFACE_INCLUDE_DIRECTORIES)
+  if(NOT KOKKOS_INCLUDE_DIRS)
+    message(FATAL_ERROR "Failed to get the kokkos include directory")
+  endif()
+endif()
+target_include_directories(kkf_kokkos_hooks PRIVATE ${KOKKOS_INCLUDE_DIRS})
+target_link_libraries(kkf_kokkos_hooks PRIVATE hdf5::hdf5 hdf5::hdf5_hl)
+
+set(KKF_KOKKOS_ALLOCATION_HEADER_SIZE 128)
+if(Kokkos_ENABLE_HIP)
+  set(KKF_KOKKOS_ALLOCATION_HEADER_SIZE 256)
+endif()
+target_compile_definitions(
+  kkf_kokkos_hooks PRIVATE KKF_KOKKOS_ALLOCATION_HEADER_SIZE=${KKF_KOKKOS_ALLOCATION_HEADER_SIZE}
+)
+
+if(Kokkos_ENABLE_CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  target_compile_definitions(kkf_kokkos_hooks PRIVATE KKF_ENABLE_CUDA_DUMP)
+  target_link_libraries(kkf_kokkos_hooks PRIVATE CUDA::cudart)
+endif()
+if(Kokkos_ENABLE_HIP)
+  target_compile_definitions(kkf_kokkos_hooks PRIVATE KKF_ENABLE_HIP_DUMP)
+  if(TARGET hip::host)
+    target_link_libraries(kkf_kokkos_hooks PRIVATE hip::host)
+  else()
+    target_link_libraries(kkf_kokkos_hooks PRIVATE hip::device)
+  endif()
+endif()
+
+set_target_properties(kkf_kokkos_hooks PROPERTIES OUTPUT_NAME kkf LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
