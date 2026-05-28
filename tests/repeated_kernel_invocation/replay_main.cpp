@@ -21,23 +21,22 @@ int main(int argc, char* argv[]) {
       cexa::kernel_replayer::replay_functor(MultiplyFunctor{0, values}));
   Kokkos::fence();
 
-  auto replay_values = cexa::kernel_replayer::get_view<int*>("values", N);
-  auto h_replay_values =
-      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_values);
+  cexa::kernel_replayer::compare_views(
+      values, std::make_tuple(N), [](auto ref_values, auto replay_values) {
+        auto h_replay_values = Kokkos::create_mirror_view_and_copy(
+            Kokkos::HostSpace(), replay_values);
 
-  auto ref_values = cexa::kernel_replayer::get_out_view<int*>("values", N);
-  auto h_ref_values =
-      Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), ref_values);
+        auto h_ref_values = Kokkos::create_mirror_view_and_copy(
+            Kokkos::HostSpace(), ref_values);
 
-  for (int i = 0; i < N; i++) {
-    if (h_replay_values(i) != h_ref_values(i)) {
-      Kokkos::printf("At index %d, expected %d but got %d\n", i,
-                     h_ref_values(i), h_replay_values(i));
-      return 1;
-    }
-  }
-
-  Kokkos::printf("values(5) = %d\n", h_replay_values(5));
+        for (int i = 0; i < N; i++) {
+          if (h_replay_values(i) != h_ref_values(i)) {
+            Kokkos::printf("At index %d, expected %d but got %d\n", i,
+                           h_ref_values(i), h_replay_values(i));
+            std::exit(1);
+          }
+        }
+      });
 
   return 0;
 }
