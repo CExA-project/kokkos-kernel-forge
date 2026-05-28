@@ -60,7 +60,8 @@ int main(int argc, char* argv[]) {
 The program has to be linked with `cexa::kernel_extractor`, it then has to be executed with
 ```sh
 KOKKOS_TOOLS_LIBS=/path/to/libkkf.so \
-KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=scale" \
+KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=scale
+--kkf-dump-kernel-invocation=1" \
 ./prog
 ```
 

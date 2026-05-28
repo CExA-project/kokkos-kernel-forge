@@ -10,7 +10,17 @@ fi
 LIBKKF_PATH=$1
 EXECUTABLE=$2
 REPLAY_EXECUTABLE=$3
-COMPARE_OUTPUT=$([ -z "$4" ]; echo $?)
+COMPARE_OUTPUT=0
+if [ "${4:-}" = "TRUE" ]; then
+  COMPARE_OUTPUT=1
+fi
+
+if [ $# -ge 4 ]; then
+  shift 4
+else
+  shift 3
+fi
+EXTRA_KOKKOS_TOOLS_ARGS="$*"
 
 OUTPUT_DIR=$(mktemp -d)
 REFERENCE_OUTPUT="$OUTPUT_DIR/reference.txt"
@@ -21,9 +31,17 @@ clean_exit() {
   exit $1
 }
 
+# TODO: Make output comparison less dependent on Kokkos/runtime log formatting.
+# Prefer comparing only stable test result lines instead of filtering known log noise.
+clean_output() {
+  grep -vF "[kokkos-hooks]" "$1" \
+    | grep -vF "KokkosP:" \
+    | grep -vF "-----------------------------------------------------------"
+}
+
 rm -f *.h5
 
-KOKKOS_TOOLS_LIBS="$LIBKKF_PATH" KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=test_kernel" $EXECUTABLE | tee "$REFERENCE_OUTPUT"
+KOKKOS_TOOLS_LIBS="$LIBKKF_PATH" KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=test_kernel $EXTRA_KOKKOS_TOOLS_ARGS" $EXECUTABLE | tee "$REFERENCE_OUTPUT"
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
@@ -40,7 +58,9 @@ if [ $COMPARE_OUTPUT -eq 0 ]; then
 fi
 
 CLEAN_REFERENCE_OUTPUT="$OUTPUT_DIR/clean_reference.txt"
-grep -vF "[kokkos-hooks]" "$REFERENCE_OUTPUT" > "$CLEAN_REFERENCE_OUTPUT"
-if ! diff "$CLEAN_REFERENCE_OUTPUT" "$REPLAY_OUTPUT"; then
+CLEAN_REPLAY_OUTPUT="$OUTPUT_DIR/clean_replay.txt"
+clean_output "$REFERENCE_OUTPUT" > "$CLEAN_REFERENCE_OUTPUT"
+clean_output "$REPLAY_OUTPUT" > "$CLEAN_REPLAY_OUTPUT"
+if ! diff "$CLEAN_REFERENCE_OUTPUT" "$CLEAN_REPLAY_OUTPUT"; then
   clean_exit 1
 fi
