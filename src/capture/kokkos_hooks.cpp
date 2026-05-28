@@ -117,8 +117,8 @@ bool should_dump_views_for_invocation(std::string_view label,
 
 std::optional<std::uint64_t> parse_positive_uint64(std::string_view value) {
   std::uint64_t parsed    = 0;
-  const auto* const begin = value.data();
-  const auto* const end   = value.data() + value.size();
+  const auto* const begin = value.begin();
+  const auto* const end   = value.end();
   const auto result       = std::from_chars(begin, end, parsed);
   if (result.ec != std::errc{} || result.ptr != end || parsed == 0) {
     return std::nullopt;
