@@ -2,21 +2,122 @@ Tools for extracting, profiling, and auto-tuning Kokkos kernels from large HPC a
 
 ## Build
 
-Clone the repo, then configure and build the Kokkos example:
+Clone the repo, then configure and build with CMake
 
 ```sh
 git clone https://github.com/CExA-project/kokkos-kernel-forge.git
 ```
 
-## Targeted view dumps
+## Extraction
 
-```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DKokkos_ROOT=<kokkos_install_dir>
-cmake --build build -j
-KOKKOS_TOOLS_LIBS=$PWD/build/openmp/libkkf.so \
-  KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=sum_values" \
-  ./build/examples/kokkos_kernel_example
+In order to extract a kernel from a program, you have to:
+1. wrap the functor in the parallel construct call with `cexa::kernel_replayer::replay_functor`
+2. execute with the `libkkf.so` kokkos tool
+
+For example, the following program:
+```cpp
+#include <Kokkos_Core.hpp>
+
+int main(int argc, char* argv[]) {
+  Kokkos::ScopeGuard kokkos_scope(argc, argv);
+
+  const int N = 1024;
+  Kokkos::View<int*> values("values", N);
+  Kokkos::parallel_for(
+      "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
+
+  Kokkos::parallel_for("scale", N,
+                       KOKKOS_LAMBDA(int i) { values(i) *= 2; });
+  Kokkos::fence();
+
+  return 0;
+}
+```
+Will become
+```cpp
+#include <Kokkos_Core.hpp>
+
+#include <kernel_extractor.hpp> // this provides replay_functor()
+
+int main(int argc, char* argv[]) {
+  Kokkos::ScopeGuard kokkos_scope(argc, argv);
+
+  const int N = 1024;
+  Kokkos::View<int*> values("values", N);
+  Kokkos::parallel_for(
+      "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
+
+  Kokkos::parallel_for("scale", N,
+                       // we wrap the functor with replay_functor(functor)
+                       cexa::kernel_replayer::replay_functor(
+                           KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
+  Kokkos::fence();
+
+  return 0;
+}
 ```
 
-See [HDF5 dump format](docs/hdf5-dumps.md) for the file naming scheme and
+The program has to be linked with `cexa::kernel_extractor`, it then has to be executed with
+```sh
+KOKKOS_TOOLS_LIBS=/path/to/libkkf.so \
+KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=scale" \
+./prog
+```
+
+This will generate two hdf5 files named `kkf_scale_2_{in,out}.h5`, see [HDF5 dump format](docs/hdf5-dumps.md) for the file naming scheme and
 stored metadata.
+
+## Replay
+
+Once the program dump has been generated, the kernel can be replayed in a
+separate program. The new program should include the parallel construct call as
+well as the functor declaration from the original program and any variable it
+depends on. The replayer should also be initialized before Kokkos, using
+`cexa::kernel_replayer::ScopeGuard`.
+
+The program above becomes
+```cpp
+#include <Kokkos_Core.hpp>
+
+#include <kernel_replayer.hpp> // <kernel_extractor.hpp> -> <kernel_replayer.hpp>
+
+int main(int argc, char* argv[]) {
+  // We initialize the replayer before Kokkos
+  cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  Kokkos::ScopeGuard kokkos_scope(argc, argv);
+
+  const int N = 1024;
+  // We don't care about the values inside the view, we only need it to have the same type as in the original program
+  Kokkos::View<int*> values("values", 1);
+  // No need to initialize, the initialized view from the original program is captured in the dump
+  // Kokkos::parallel_for(
+  //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
+
+  Kokkos::parallel_for("scale", N,
+                       // we still wrap the functor with replay_functor(functor)
+                       cexa::kernel_replayer::replay_functor(
+                           KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
+  Kokkos::fence();
+
+  return 0;
+}
+```
+
+The program has to be linked with `cexa::kernel_replayer`, the dumps are passed using command line flags
+```sh
+./replay_prog --kernel-replayer-dump=kkf_scale_2_in.h5 --kernel-replayer-out-dump=kkf_scale_2_out.h5
+```
+
+The value of allocations from the original program can be accessed using the
+`get_allocation` and `get_out_allocation` for the values before and after the
+kernel respectively.
+
+```cpp
+using memory_space = Kokkos::DefaultExecutionSpace::memory_space;
+// Value of `values` before the kernel
+int* initial_values_ptr = static_cast<int*>(cexa::kernel_replayer::get_allocation<memory_space>("values");
+Kokkos::View<int*> intial_values(initial_values_ptr, 1024);
+// Value of `values` after the kernel
+int* result_values_ptr = static_cast<int*>(cexa::kernel_replayer::get_out_allocation<memory_space>("values");
+Kokkos::View<int*> result_values(initial_values_ptr, 1024);
+```
