@@ -267,13 +267,8 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
     } else if (argument.starts_with(dump_kernel_invocation_option)) {
       const std::string_view value =
           argument.substr(dump_kernel_invocation_option.size());
-      if (const auto invocation = parse_positive_uint64(value);
-          invocation.has_value()) {
-        dump_kernel_invocation       = *invocation;
-        dump_kernel_invocation_valid = true;
-      } else {
-        dump_kernel_invocation.reset();
-        dump_kernel_invocation_valid = false;
+      dump_kernel_invocation = parse_positive_uint64(value);
+      if (!dump_kernel_invocation.has_value()) {
         log_line("invalid ", dump_kernel_invocation_option, " value=\"", value,
                  "\"; expected a positive integer");
       }
