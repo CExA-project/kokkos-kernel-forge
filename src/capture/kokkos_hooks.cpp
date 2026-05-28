@@ -7,8 +7,7 @@
  *
  * The hook keeps the output focused on application code by filtering internal
  * Kokkos labels. For the selected kernel label, it dumps active Kokkos data
- * allocations to HDF5 before and after the kernel. End callbacks also request a
- * Kokkos fence.
+ * allocations to HDF5 before and after the selected kernel
  */
 
 #include <impl/Kokkos_Profiling_C_Interface.h>
@@ -209,11 +208,10 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
     }
   }
 
-  if (fence != nullptr) {
-    fence(device_id);
-  }
-
   if (dump_this_kernel) {
+    if (fence != nullptr) {
+      fence(device_id);
+    }
     dump_views("out", label, kernel_id, invocation);
   }
 
