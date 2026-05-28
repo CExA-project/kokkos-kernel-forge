@@ -58,8 +58,7 @@ Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 kkf::AllocationTracker allocation_tracker;
 
 std::string dump_kernel_label;
-std::optional<std::uint64_t> dump_kernel_invocation;
-bool dump_kernel_invocation_valid = true;
+std::optional<std::uint64_t> dump_kernel_invocation = 1;
 
 constexpr std::string_view dump_kernel_label_option =
     "--kkf-dump-kernel-label=";
