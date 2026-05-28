@@ -6,16 +6,20 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-set(Kokkos_ENABLE_SERIAL ON CACHE BOOL "Enable the Kokkos Serial backend")
 option(KKF_BUILD_EXAMPLES "Build kokkos-kernel-forge examples" ON)
+option(KKF_BUILD_TESTS "Build kokkos-kernel-forge tests" OFF)
 
 find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)
 
-include(CTest)
-
 add_subdirectory(src)
+
+include(CTest)
 
 if(KKF_BUILD_EXAMPLES)
   add_subdirectory(examples)
+endif()
+
+if(KKF_BUILD_TESTS)
+  add_subdirectory(tests)
 endif()

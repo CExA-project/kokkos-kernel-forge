@@ -1,0 +1,7 @@
+add_executable(small_struct_functor main.cpp)
+target_link_libraries(small_struct_functor PRIVATE Kokkos::kokkos kernel_extractor)
+
+add_executable(small_struct_functor_replay replay_main.cpp)
+target_link_libraries(small_struct_functor_replay PRIVATE Kokkos::kokkos kernel_replayer)
+
+add_replay_test(small_struct_functor TRUE)

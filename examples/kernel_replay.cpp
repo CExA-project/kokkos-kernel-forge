@@ -2,19 +2,20 @@
 
 #include <iostream>
 
-#include <kernel_extractor.hpp>
+#include <kernel_replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  Kokkos::ScopeGuard kokkos(argc, argv);
+  cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   constexpr int number_of_values = 1024;
-  Kokkos::View<int*> values("view", number_of_values);
+  Kokkos::View<int*> values("view", 1);
 
-  Kokkos::parallel_for(
-      "fill_values", Kokkos::RangePolicy<>(0, number_of_values),
-      KOKKOS_LAMBDA(const int i) { values(i) = i; });
+  // Kokkos::parallel_for(
+  //     "fill_values", Kokkos::RangePolicy<>(0, number_of_values),
+  //     KOKKOS_LAMBDA(const int i) { values(i) = i; });
 
-  int factor = 2;
+  int factor = 0;
 
   int sum = 0;
   Kokkos::parallel_reduce("sum_values",
