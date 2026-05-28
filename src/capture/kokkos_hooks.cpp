@@ -109,9 +109,8 @@ bool should_dump_views_for_label(std::string_view label) {
 
 bool should_dump_views_for_invocation(std::string_view label,
                                       const std::uint64_t invocation) {
-  return dump_kernel_invocation_valid && should_dump_views_for_label(label) &&
-         (!dump_kernel_invocation.has_value() ||
-          invocation == dump_kernel_invocation.value());
+  return dump_kernel_invocation.has_value() && should_dump_views_for_label(label) &&
+          invocation == dump_kernel_invocation.value();
 }
 
 std::optional<std::uint64_t> parse_positive_uint64(std::string_view value) {
