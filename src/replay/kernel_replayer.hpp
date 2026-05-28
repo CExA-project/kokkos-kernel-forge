@@ -116,6 +116,7 @@ Functor replay_functor(const Functor& functor) {
   Functor f(*tmp_functor);
 
   std::memcpy(tmp_buffer, tmp_functor_buffer, N);
+  std::free(tmp_functor_buffer);
   tmp_functor->~Functor();
   std::free(tmp_buffer);
 
