@@ -14,15 +14,15 @@ int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int N = 1024;
-  Kokkos::View<int*> values("values", 1);
+  Kokkos::View<int*> values;
 
   Kokkos::parallel_for(
       "test_kernel", N,
       cexa::kernel_replayer::replay_functor(MultiplyFunctor{0, values}));
   Kokkos::fence();
 
-  cexa::kernel_replayer::compare_views(
-      values, std::make_tuple(N), [](auto ref_values, auto replay_values) {
+  cexa::kernel_replayer::compare_views<int*>(
+      "values", std::make_tuple(N), [](auto ref_values, auto replay_values) {
         auto h_replay_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), replay_values);
 

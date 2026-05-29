@@ -7,9 +7,9 @@ int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int N = 1024;
-  Kokkos::View<int*> A("A", 1);
-  Kokkos::View<int*> B("B", 1);
-  Kokkos::View<int*> C("C", 1);
+  Kokkos::View<int*> A;
+  Kokkos::View<int*> B;
+  Kokkos::View<int*> C;
   // Kokkos::parallel_for(
   //     "init", N, KOKKOS_LAMBDA(int i) {
   //       A(i) = i;
@@ -24,8 +24,8 @@ int main(int argc, char* argv[]) {
   // auto h_C = Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), C);
   // Kokkos::printf("C(5) = %d\n", h_C(5));
 
-  cexa::kernel_replayer::compare_views(
-      C, std::make_tuple(1024), [](auto ref_C, auto replay_C) {
+  cexa::kernel_replayer::compare_views<int*>(
+      "C", std::make_tuple(1024), [](auto ref_C, auto replay_C) {
         auto h_replay_C =
             Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), replay_C);
         auto h_ref_C =
