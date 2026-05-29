@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int N = 1024;
-  Kokkos::View<int*> values("values", 1);
+  Kokkos::View<int*> values;
   // Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
@@ -33,8 +33,8 @@ int main(int argc, char* argv[]) {
   //     Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
   // Kokkos::printf("values(5) = %d\n", h_values(5));
 
-  cexa::kernel_replayer::compare_views(
-      values, std::make_tuple(1024), [](auto ref_values, auto replay_values) {
+  cexa::kernel_replayer::compare_views<int*>(
+      "values", std::make_tuple(1024), [](auto ref_values, auto replay_values) {
         auto h_replay_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), replay_values);
 

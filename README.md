@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
 
   const int N = 1024;
   // We don't care about the values inside the view, we only need it to have the same type as in the original program
-  Kokkos::View<int*> values("values", 1);
+  Kokkos::View<int*> values;
   // No need to initialize, the initialized view from the original program is captured in the dump
   // Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });

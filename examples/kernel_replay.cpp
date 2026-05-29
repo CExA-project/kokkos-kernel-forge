@@ -9,7 +9,7 @@ int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   constexpr int number_of_values = 1024;
-  Kokkos::View<int*> values("view", 1);
+  Kokkos::View<int*> values;
 
   // Kokkos::parallel_for(
   //     "fill_values", Kokkos::RangePolicy<>(0, number_of_values),
