@@ -37,7 +37,7 @@ jobs:
 
     env:
       CXX: ${{ matrix.cxx }}
-      KOKKOS_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
       KOKKOS_VERSION: 5.1.1
 
     steps:
