@@ -224,8 +224,8 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
 }  // namespace
 
 extern "C" {
-// variable used by the kernel extractor to detect the presence of the dumping
-// tool, we don't care about it's value
+// Variable used by the kernel extractor to detect the presence of the dumping
+// tool, we don't care about its value.
 KOKKOS_HOOKS_EXPORT int kernel_dump_tool_is_present = 0;
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
