@@ -1,0 +1,88 @@
+name: build-and-test
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths-ignore:
+    - README.md
+    - docs/**
+  push:
+    branches:
+    - main
+    paths-ignore:
+    - README.md
+    - docs/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cmake:
+    name: ${{ matrix.compiler }} build and tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - compiler: gcc
+          cxx: g++
+        - compiler: clang
+          cxx: clang++
+
+    env:
+      CXX: ${{ matrix.cxx }}
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
+      KOKKOS_VERSION: 5.1.1
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v5
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          clang \
+          cmake \
+          g++ \
+          hdf5-tools \
+          libhdf5-dev \
+          ninja-build
+
+    - name: Cache Kokkos install
+      id: cache-kokkos
+      uses: actions/cache@v5
+      with:
+        path: ${{ env.Kokkos_ROOT }}
+        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-serial-v1
+
+    - name: Build and install Kokkos
+      if: steps.cache-kokkos.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
+        cmake -S kokkos-src -B kokkos-build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
+          -DKokkos_ENABLE_SERIAL=ON
+        cmake --build kokkos-build --parallel "$(nproc)"
+        cmake --install kokkos-build
+
+    - name: Configure project
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DKKF_BUILD_TESTS=ON
+
+    - name: Build project
+      run: cmake --build build --parallel "$(nproc)"
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure
