@@ -70,9 +70,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_INSTALL_PREFIX="$KOKKOS_ROOT" \
-          -DKokkos_ENABLE_SERIAL=ON \
-          -DKokkos_ENABLE_TESTS=OFF \
-          -DKokkos_ENABLE_EXAMPLES=OFF
+          -DKokkos_ENABLE_SERIAL=ON
         cmake --build kokkos-build --parallel "$(nproc)"
         cmake --install kokkos-build
 
