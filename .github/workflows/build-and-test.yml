@@ -69,7 +69,7 @@ jobs:
         cmake -S kokkos-src -B kokkos-build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_COMPILER="$CXX" \
-          -DCMAKE_INSTALL_PREFIX="$KOKKOS_ROOT" \
+          -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
           -DKokkos_ENABLE_SERIAL=ON
         cmake --build kokkos-build --parallel "$(nproc)"
         cmake --install kokkos-build
