@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   cmake:
-    name: CMake build and tests (${{ matrix.compiler }})
+    name: ${{ matrix.compiler }} build and tests
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
