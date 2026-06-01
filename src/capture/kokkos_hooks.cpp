@@ -223,41 +223,45 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
 
 }  // namespace
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
+extern "C" {
+// variable used by the kernel extractor to detect the presence of the dumping
+// tool, we don't care about it's value
+KOKKOS_HOOKS_EXPORT int kernel_dump_tool_is_present = 0;
+
+KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {
   begin_kernel("kokkosp_begin_parallel_for", label, device_id, kernel_id);
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_for(
+KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_for(
     const std::uint64_t kernel_id) {
   end_kernel("kokkosp_end_parallel_for", kernel_id);
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_reduce(
+KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_reduce(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {
   begin_kernel("kokkosp_begin_parallel_reduce", label, device_id, kernel_id);
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_reduce(
+KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_reduce(
     const std::uint64_t kernel_id) {
   end_kernel("kokkosp_end_parallel_reduce", kernel_id);
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_scan(
+KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_scan(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {
   begin_kernel("kokkosp_begin_parallel_scan", label, device_id, kernel_id);
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_scan(
+KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_scan(
     const std::uint64_t kernel_id) {
   end_kernel("kokkosp_end_parallel_scan", kernel_id);
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
-                                                       char** argv) {
+KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc, char** argv) {
   for (int i = 0; i < argc; ++i) {
     const std::string_view argument = argv[i] != nullptr ? argv[i] : "";
     if (argument.starts_with(dump_kernel_label_option)) {
@@ -275,7 +279,7 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc,
   }
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
+KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
     const Kokkos_Profiling_SpaceHandle space, const char* label,
     const void* ptr, const std::uint64_t size) {
   const std::string allocation_label = label_or_unknown(label);
@@ -294,7 +298,7 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
   }
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_deallocate_data(
+KOKKOS_HOOKS_EXPORT void kokkosp_deallocate_data(
     const Kokkos_Profiling_SpaceHandle space, const char* label,
     const void* ptr, const std::uint64_t size) {
   const std::string deallocation_label = label_or_unknown(label);
@@ -311,7 +315,7 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_deallocate_data(
   }
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {
+KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
 
   log_line("kokkosp_finalize_library allocation_summary active_allocations=",
@@ -326,16 +330,17 @@ extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {
   }
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_provide_tool_programming_interface(
+KOKKOS_HOOKS_EXPORT void kokkosp_provide_tool_programming_interface(
     const std::uint32_t, Kokkos_Tools_ToolProgrammingInterface interface) {
   std::lock_guard<std::mutex> lock(state_mutex);
   tool_fence = interface.fence;
 }
 
-extern "C" KOKKOS_HOOKS_EXPORT void kokkosp_request_tool_settings(
+KOKKOS_HOOKS_EXPORT void kokkosp_request_tool_settings(
     const std::uint32_t, Kokkos_Tools_ToolSettings* settings) {
   if (settings != nullptr) {
     *settings                         = {};
     settings->requires_global_fencing = false;
   }
+}
 }
