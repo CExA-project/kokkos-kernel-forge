@@ -1,0 +1,66 @@
+name: build-and-test
+
+on:
+  pull_request:
+  push:
+    branches:
+    - main
+
+permissions:
+  contents: read
+
+jobs:
+  cmake:
+    name: CMake build and tests
+    runs-on: ubuntu-24.04
+
+    env:
+      KOKKOS_ROOT: ${{ github.workspace }}/.deps/kokkos
+      KOKKOS_VERSION: 5.1.1
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          cmake \
+          g++ \
+          hdf5-tools \
+          libhdf5-dev \
+          ninja-build
+
+    - name: Cache Kokkos install
+      id: cache-kokkos
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.KOKKOS_ROOT }}
+        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-serial-v1
+
+    - name: Build and install Kokkos
+      if: steps.cache-kokkos.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
+        cmake -S kokkos-src -B kokkos-build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX="$KOKKOS_ROOT" \
+          -DKokkos_ENABLE_SERIAL=ON \
+          -DKokkos_ENABLE_TESTS=OFF \
+          -DKokkos_ENABLE_EXAMPLES=OFF
+        cmake --build kokkos-build --parallel "$(nproc)"
+        cmake --install kokkos-build
+
+    - name: Configure project
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DKokkos_ROOT="$KOKKOS_ROOT" \
+          -DKKF_BUILD_TESTS=ON
+
+    - name: Build project
+      run: cmake --build build --parallel "$(nproc)"
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure
