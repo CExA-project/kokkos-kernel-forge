@@ -1,12 +1,7 @@
-#include <Kokkos_Macros.hpp>
+#include "kernel_extractor.hpp"
 #if defined(KOKKOS_ENABLE_LIBDL)
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
 #include <dlfcn.h>
 #endif
-
-#include "kernel_extractor.hpp"
 
 namespace cexa::kernel_replayer::impl {
 bool check_kernel_dump_tool_is_present() {
