@@ -12,14 +12,29 @@ option(KKF_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
 option(KKF_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
 
 if(KKF_ENABLE_ASAN)
-  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-  add_link_options(-fsanitize=address)
+  list(APPEND KKF_SANITIZER_COMPILE_OPTIONS -fsanitize=address -fno-omit-frame-pointer)
+  list(APPEND KKF_SANITIZER_LINK_OPTIONS -fsanitize=address)
 endif()
 
 if(KKF_ENABLE_UBSAN)
-  add_compile_options(-fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
-  add_link_options(-fsanitize=undefined)
+  list(APPEND KKF_SANITIZER_COMPILE_OPTIONS -fsanitize=undefined -fno-sanitize-recover=undefined
+       -fno-omit-frame-pointer
+  )
+  list(APPEND KKF_SANITIZER_LINK_OPTIONS -fsanitize=undefined)
 endif()
+
+function(kkf_enable_sanitizers TARGET_NAME)
+  if(KKF_SANITIZER_COMPILE_OPTIONS)
+    target_compile_options("${TARGET_NAME}" PRIVATE ${KKF_SANITIZER_COMPILE_OPTIONS})
+  endif()
+
+  if(KKF_SANITIZER_LINK_OPTIONS)
+    get_target_property(KKF_TARGET_TYPE "${TARGET_NAME}" TYPE)
+    if(KKF_TARGET_TYPE STREQUAL "EXECUTABLE" OR KKF_TARGET_TYPE STREQUAL "SHARED_LIBRARY")
+      target_link_options("${TARGET_NAME}" PRIVATE ${KKF_SANITIZER_LINK_OPTIONS})
+    endif()
+  endif()
+endfunction()
 
 find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)

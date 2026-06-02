@@ -1,4 +1,5 @@
 add_library(kkf_kokkos_hooks SHARED allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp)
+kkf_enable_sanitizers(kkf_kokkos_hooks)
 target_compile_features(kkf_kokkos_hooks PRIVATE cxx_std_20)
 
 get_target_property(KOKKOS_INCLUDE_DIRS Kokkos::kokkos INCLUDE_DIRECTORIES)
