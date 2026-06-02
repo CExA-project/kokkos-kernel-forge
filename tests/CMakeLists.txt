@@ -19,7 +19,7 @@ function(add_capture_only_test TEST_NAME)
   )
   set_tests_properties(
     "${KKF_CAPTURE_ONLY_TEST_NAME}" PROPERTIES ENVIRONMENT KKF_CAPTURE_ONLY=1 LABELS
-                                               "capture_only;sanitizer_compatible"
+                                               "capture_only;sanitizer_compatible" RESOURCE_LOCK "${TEST_NAME}_h5"
   )
 endfunction()
 
@@ -37,7 +37,7 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
     message(FATAL_ERROR "Replay test '${TEST_NAME}' must be classified for sanitizer CI")
   endif()
 
-  set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "${KKF_TEST_LABELS}")
+  set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "${KKF_TEST_LABELS}" RESOURCE_LOCK "${TEST_NAME}_h5")
 endfunction()
 
 add_subdirectory(no_capture)
