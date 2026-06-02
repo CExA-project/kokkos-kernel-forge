@@ -8,6 +8,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KKF_BUILD_EXAMPLES "Build kokkos-kernel-forge examples" ON)
 option(KKF_BUILD_TESTS "Build kokkos-kernel-forge tests" OFF)
+option(KKF_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
+
+if(KKF_ENABLE_ASAN)
+  add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address)
+endif()
 
 find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)
