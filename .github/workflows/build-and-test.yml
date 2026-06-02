@@ -38,7 +38,7 @@ jobs:
           linker_flags: ''
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
-          ctest_args: ''
+          ctest_args: -LE capture_only
         - name: clang Release build and tests
           compiler: clang
           cxx: clang++
@@ -47,7 +47,7 @@ jobs:
           linker_flags: ''
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
-          ctest_args: ''
+          ctest_args: -LE capture_only
         - name: clang ASan build and tests
           compiler: clang-asan
           cxx: clang++
