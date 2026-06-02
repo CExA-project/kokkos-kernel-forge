@@ -11,6 +11,12 @@ set(KKF_FIXED_HOST_ADDRESS_REPLAY_TESTS multiple_views_capture repeated_kernel_i
                                         view_scalar_capture
 )
 
+function(kkf_set_test_working_directory TEST_NAME)
+  set(TEST_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/work/${TEST_NAME}")
+  file(MAKE_DIRECTORY "${TEST_WORKING_DIRECTORY}")
+  set_tests_properties("${TEST_NAME}" PROPERTIES WORKING_DIRECTORY "${TEST_WORKING_DIRECTORY}")
+endfunction()
+
 function(add_capture_only_test TEST_NAME)
   set(KKF_CAPTURE_ONLY_TEST_NAME "capture_only_${TEST_NAME}")
   add_test(NAME "${KKF_CAPTURE_ONLY_TEST_NAME}"
@@ -19,8 +25,9 @@ function(add_capture_only_test TEST_NAME)
   )
   set_tests_properties(
     "${KKF_CAPTURE_ONLY_TEST_NAME}" PROPERTIES ENVIRONMENT KKF_CAPTURE_ONLY=1 LABELS
-                                               "capture_only;sanitizer_compatible" RESOURCE_LOCK "${TEST_NAME}_h5"
+                                               "capture_only;sanitizer_compatible"
   )
+  kkf_set_test_working_directory("${KKF_CAPTURE_ONLY_TEST_NAME}")
 endfunction()
 
 function(add_replay_test TEST_NAME COMPARE_OUTPUT)
@@ -37,7 +44,8 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
     message(FATAL_ERROR "Replay test '${TEST_NAME}' must be classified for sanitizer CI")
   endif()
 
-  set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "${KKF_TEST_LABELS}" RESOURCE_LOCK "${TEST_NAME}_h5")
+  set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "${KKF_TEST_LABELS}")
+  kkf_set_test_working_directory("${TEST_NAME}")
 endfunction()
 
 add_subdirectory(no_capture)
