@@ -123,4 +123,4 @@ jobs:
       run: cmake --build build --parallel "$(nproc)"
 
     - name: Run tests
-      run: ctest --test-dir build --output-on-failure ${{ matrix.ctest_args }}
+      run: ctest --test-dir build --output-on-failure --no-tests=error ${{ matrix.ctest_args }}

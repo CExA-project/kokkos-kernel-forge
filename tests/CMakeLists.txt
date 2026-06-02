@@ -34,7 +34,7 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
     set(KKF_TEST_LABELS "replay;fixed_host_address_replay")
     add_capture_only_test("${TEST_NAME}" ${ARGN})
   else()
-    set(KKF_TEST_LABELS replay)
+    message(FATAL_ERROR "Replay test '${TEST_NAME}' must be classified for sanitizer CI")
   endif()
 
   set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "${KKF_TEST_LABELS}")
