@@ -23,7 +23,7 @@ concurrency:
 jobs:
   cmake:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     strategy:
@@ -34,8 +34,7 @@ jobs:
           compiler: gcc
           cxx: g++
           build_type: Release
-          cxx_flags: ''
-          linker_flags: ''
+          kokkos_cache_flavor: serial-v1-release
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
           ctest_args: -LE capture_only
@@ -43,8 +42,7 @@ jobs:
           compiler: clang
           cxx: clang++
           build_type: Release
-          cxx_flags: ''
-          linker_flags: ''
+          kokkos_cache_flavor: serial-v1-release
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
           ctest_args: -LE capture_only
@@ -54,6 +52,7 @@ jobs:
           build_type: RelWithDebInfo
           cxx_flags: -fsanitize=address -fno-omit-frame-pointer
           linker_flags: -fsanitize=address
+          kokkos_cache_flavor: serial-v1-asan
           kkf_enable_asan: ON
           kkf_enable_ubsan: OFF
           ctest_args: -L sanitizer_compatible
@@ -63,6 +62,7 @@ jobs:
           build_type: RelWithDebInfo
           cxx_flags: -fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer
           linker_flags: -fsanitize=undefined
+          kokkos_cache_flavor: serial-v1-ubsan
           kkf_enable_asan: OFF
           kkf_enable_ubsan: ON
           ctest_args: -L sanitizer_compatible
@@ -70,7 +70,6 @@ jobs:
     env:
       CXX: ${{ matrix.cxx }}
       Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
-      KOKKOS_CACHE_SUFFIX: serial-v1
       KOKKOS_VERSION: 5.1.1
 
     steps:
@@ -93,7 +92,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ env.KOKKOS_CACHE_SUFFIX }}
+        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ matrix.kokkos_cache_flavor }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'
