@@ -47,6 +47,14 @@ if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
 fi
 
+if [ "${KKF_CAPTURE_ONLY:-0}" = "1" ]; then
+  if ! compgen -G "*_in.h5" > /dev/null || ! compgen -G "*_out.h5" > /dev/null; then
+    echo "Capture-only test did not produce the expected HDF5 dumps"
+    clean_exit 1
+  fi
+  clean_exit 0
+fi
+
 $REPLAY_EXECUTABLE --kernel-replayer-dump="$(ls *_in.h5)" --kernel-replayer-out-dump="$(ls *_out.h5)" | tee "$REPLAY_OUTPUT"
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
