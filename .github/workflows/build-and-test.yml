@@ -70,6 +70,7 @@ jobs:
     env:
       CXX: ${{ matrix.cxx }}
       Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
+      KOKKOS_CACHE_SUFFIX: serial-v1
       KOKKOS_VERSION: 5.1.1
 
     steps:
@@ -92,7 +93,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-serial-v1
+        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ env.KOKKOS_CACHE_SUFFIX }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'
