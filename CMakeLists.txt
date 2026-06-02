@@ -9,10 +9,16 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(KKF_BUILD_EXAMPLES "Build kokkos-kernel-forge examples" ON)
 option(KKF_BUILD_TESTS "Build kokkos-kernel-forge tests" OFF)
 option(KKF_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
+option(KKF_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
 
 if(KKF_ENABLE_ASAN)
   add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
   add_link_options(-fsanitize=address)
+endif()
+
+if(KKF_ENABLE_UBSAN)
+  add_compile_options(-fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=undefined)
 endif()
 
 find_package(Kokkos REQUIRED)
