@@ -6,7 +6,7 @@ endfunction()
 
 kkf_add_kernel_replayer(kernel_replayer)
 
-if(KKF_SANITIZER_COMPILE_OPTIONS OR KKF_SANITIZER_LINK_OPTIONS)
+if(KKF_ENABLE_ASAN OR KKF_ENABLE_UBSAN)
   kkf_add_kernel_replayer(kernel_replayer_sanitized)
   kkf_enable_sanitizers(kernel_replayer_sanitized)
 else()
