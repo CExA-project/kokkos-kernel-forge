@@ -13,8 +13,8 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
                                        $<TARGET_FILE:${TEST_NAME}_replay> ${COMPARE_OUTPUT} ${ARGN}
   )
 
-  # Sanitizer jobs instrument the capture executable and hooks, while replay
-  # executables stay unsanitized to allow fixed-address host allocations.
+  # Replay tests with fixed-address host allocations link to the unsanitized
+  # replayer, while scalar replay tests use the sanitized replayer variant.
   set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "replay;sanitizer_compatible")
   kkf_set_test_working_directory("${TEST_NAME}")
 endfunction()
