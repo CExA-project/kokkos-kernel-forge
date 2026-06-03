@@ -87,12 +87,26 @@ jobs:
           libhdf5-dev \
           ninja-build
 
+    - name: Compute Kokkos cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "ImageOS=${ImageOS:-unknown}"
+          echo "ImageVersion=${ImageVersion:-unknown}"
+          echo "CXX=$CXX"
+          "$CXX" --version
+          cmake --version
+          ninja --version
+        } > .kokkos-cache-fingerprint
+        cat .kokkos-cache-fingerprint
+
     - name: Cache Kokkos install
       id: cache-kokkos
       uses: actions/cache@v5
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ matrix.kokkos_cache_flavor }}
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ matrix.kokkos_cache_flavor }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'
