@@ -3,7 +3,6 @@ kkf_enable_sanitizers(scalar_capture)
 target_link_libraries(scalar_capture PRIVATE Kokkos::kokkos kernel_extractor)
 
 add_executable(scalar_capture_replay replay_main.cpp)
-kkf_enable_sanitizers(scalar_capture_replay)
 target_link_libraries(scalar_capture_replay PRIVATE Kokkos::kokkos kernel_replayer)
 
 add_replay_test(scalar_capture TRUE)

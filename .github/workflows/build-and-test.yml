@@ -34,25 +34,18 @@ jobs:
           compiler: gcc
           cxx: g++
           build_type: Release
-          kokkos_cache_flavor: serial-v1-release
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
-          ctest_args: -LE capture_only
         - name: clang Release build and tests
           compiler: clang
           cxx: clang++
           build_type: Release
-          kokkos_cache_flavor: serial-v1-release
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
-          ctest_args: -LE capture_only
         - name: clang ASan build and tests
           compiler: clang-asan
           cxx: clang++
           build_type: RelWithDebInfo
-          cxx_flags: -fsanitize=address -fno-omit-frame-pointer
-          linker_flags: -fsanitize=address
-          kokkos_cache_flavor: serial-v1-asan
           kkf_enable_asan: ON
           kkf_enable_ubsan: OFF
           ctest_args: -L sanitizer_compatible
@@ -60,9 +53,6 @@ jobs:
           compiler: clang-ubsan
           cxx: clang++
           build_type: RelWithDebInfo
-          cxx_flags: -fsanitize=undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer
-          linker_flags: -fsanitize=undefined
-          kokkos_cache_flavor: serial-v1-ubsan
           kkf_enable_asan: OFF
           kkf_enable_ubsan: ON
           ctest_args: -L sanitizer_compatible
@@ -94,6 +84,14 @@ jobs:
           echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
           echo "ImageOS=${ImageOS:-unknown}"
           echo "ImageVersion=${ImageVersion:-unknown}"
+          echo "KOKKOS_VERSION=$KOKKOS_VERSION"
+          echo "Kokkos_ENABLE_SERIAL=ON"
+          echo "matrix.compiler=${{ matrix.compiler }}"
+          echo "CMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          echo "CMAKE_CXX_FLAGS=${{ matrix.cxx_flags }}"
+          echo "CMAKE_EXE_LINKER_FLAGS=${{ matrix.linker_flags }}"
+          echo "CMAKE_SHARED_LINKER_FLAGS=${{ matrix.linker_flags }}"
+          echo "CMAKE_MODULE_LINKER_FLAGS=${{ matrix.linker_flags }}"
           echo "CXX=$CXX"
           "$CXX" --version
           cmake --version
@@ -106,7 +104,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ matrix.build_type }}-${{ matrix.kokkos_cache_flavor }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'

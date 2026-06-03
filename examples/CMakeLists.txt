@@ -5,5 +5,4 @@ target_link_libraries(kokkos_kernel_example PRIVATE Kokkos::kokkos kernel_extrac
 target_compile_features(kokkos_kernel_example PRIVATE cxx_std_20)
 
 add_executable(kernel_replay kernel_replay.cpp)
-kkf_enable_sanitizers(kernel_replay)
 target_link_libraries(kernel_replay PRIVATE Kokkos::kokkos kernel_replayer)

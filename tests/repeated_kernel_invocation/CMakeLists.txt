@@ -3,7 +3,6 @@ kkf_enable_sanitizers(repeated_kernel_invocation)
 target_link_libraries(repeated_kernel_invocation PRIVATE Kokkos::kokkos kernel_extractor)
 
 add_executable(repeated_kernel_invocation_replay replay_main.cpp)
-kkf_enable_sanitizers(repeated_kernel_invocation_replay)
 target_link_libraries(repeated_kernel_invocation_replay PRIVATE Kokkos::kokkos kernel_replayer)
 
 add_replay_test(repeated_kernel_invocation TRUE "--kkf-dump-kernel-invocation=2")
