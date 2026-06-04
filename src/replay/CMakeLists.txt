@@ -1,3 +1,14 @@
-add_library(kernel_replayer kernel_replayer.cpp)
-target_include_directories(kernel_replayer PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
-target_link_libraries(kernel_replayer PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl)
+function(kkf_add_kernel_replayer TARGET_NAME)
+  add_library("${TARGET_NAME}" kernel_replayer.cpp)
+  target_include_directories("${TARGET_NAME}" PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
+  target_link_libraries("${TARGET_NAME}" PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl)
+endfunction()
+
+kkf_add_kernel_replayer(kernel_replayer)
+
+if(KKF_ENABLE_ASAN OR KKF_ENABLE_UBSAN)
+  kkf_add_kernel_replayer(kernel_replayer_sanitized)
+  kkf_enable_sanitizers(kernel_replayer_sanitized)
+else()
+  add_library(kernel_replayer_sanitized ALIAS kernel_replayer)
+endif()

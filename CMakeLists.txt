@@ -8,6 +8,30 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KKF_BUILD_EXAMPLES "Build kokkos-kernel-forge examples" ON)
 option(KKF_BUILD_TESTS "Build kokkos-kernel-forge tests" OFF)
+option(KKF_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
+option(KKF_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
+
+add_library(kkf_sanitizers INTERFACE)
+
+if(KKF_ENABLE_ASAN OR KKF_ENABLE_UBSAN)
+  target_compile_options(kkf_sanitizers INTERFACE -fno-omit-frame-pointer)
+endif()
+
+if(KKF_ENABLE_ASAN)
+  target_compile_options(kkf_sanitizers INTERFACE -fsanitize=address)
+  target_link_options(kkf_sanitizers INTERFACE -fsanitize=address)
+endif()
+
+if(KKF_ENABLE_UBSAN)
+  target_compile_options(kkf_sanitizers INTERFACE -fsanitize=undefined -fno-sanitize-recover=undefined)
+  target_link_options(kkf_sanitizers INTERFACE -fsanitize=undefined)
+endif()
+
+function(kkf_enable_sanitizers TARGET_NAME)
+  if(KKF_ENABLE_ASAN OR KKF_ENABLE_UBSAN)
+    target_link_libraries("${TARGET_NAME}" PRIVATE kkf_sanitizers)
+  endif()
+endfunction()
 
 find_package(Kokkos REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)

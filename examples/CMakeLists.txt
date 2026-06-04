@@ -1,4 +1,5 @@
 add_executable(kokkos_kernel_example kokkos_kernel_example.cpp)
+kkf_enable_sanitizers(kokkos_kernel_example)
 
 target_link_libraries(kokkos_kernel_example PRIVATE Kokkos::kokkos kernel_extractor)
 target_compile_features(kokkos_kernel_example PRIVATE cxx_std_20)
