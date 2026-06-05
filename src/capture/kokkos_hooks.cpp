@@ -79,10 +79,6 @@ bool is_internal_label(std::string_view label) {
          label.starts_with("KOKKOS_") || label.starts_with("kokkos.");
 }
 
-bool is_user_label(const char* label) {
-  return !is_internal_label(label_or_unknown(label));
-}
-
 std::string bounded_string(const char* value, std::size_t max_size) {
   if (value == nullptr) {
     return "<null>";
@@ -138,20 +134,19 @@ void dump_views(const char* phase, const std::string& label,
   const kkf::ViewDumpResult result =
       kkf::dump_view_snapshot(snapshot, phase, label, kernel_id, invocation);
   const std::string dump_path = obtain_dump_path(result.filename);
-  if (!result.ok) {
+  if (result.ok) {
+    log_line("dump_written phase=", phase, " path=\"", dump_path,
+             "\" kernel_id=", kernel_id, " invocation=", invocation,
+             " active_allocations=", snapshot.allocations.size(),
+             " active_bytes=", snapshot.active_bytes);
+  } else {
     log_line("dump_failed phase=", phase, " path=\"", dump_path,
              "\" kernel_id=", kernel_id, " invocation=", invocation);
-    return;
   }
-
-  log_line("dump_written phase=", phase, " path=\"", dump_path,
-           "\" kernel_id=", kernel_id, " invocation=", invocation,
-           " active_allocations=", snapshot.allocations.size(),
-           " active_bytes=", snapshot.active_bytes);
 }
 
 bool should_track_allocation(const char* label, const void* ptr) {
-  return ptr != nullptr && is_user_label(label);
+  return ptr != nullptr && !is_internal_label(label_or_unknown(label));
 }
 
 const void* allocation_data_pointer(const void* ptr) {
@@ -270,6 +265,10 @@ KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc, char** argv) {
       const std::string_view value =
           argument.substr(dump_kernel_invocation_option.size());
       dump_kernel_invocation = parse_positive_uint64(value);
+      if (!dump_kernel_invocation.has_value()) {
+        log_line("invalid ", dump_kernel_invocation_option, " value=\"", value,
+                 "\"; expected a positive integer");
+      }
     }
   }
 }
@@ -296,8 +295,6 @@ KOKKOS_HOOKS_EXPORT void kokkosp_deallocate_data(
     allocation_tracker.record_deallocation(deallocation_space, ptr);
   }
 }
-
-KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {}
 
 KOKKOS_HOOKS_EXPORT void kokkosp_provide_tool_programming_interface(
     const std::uint32_t, Kokkos_Tools_ToolProgrammingInterface interface) {
