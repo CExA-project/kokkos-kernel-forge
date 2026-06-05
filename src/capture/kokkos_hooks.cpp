@@ -126,7 +126,7 @@ std::optional<std::uint64_t> parse_positive_uint64(std::string_view value) {
   return parsed;
 }
 
-std::string absolute_dump_path(const std::string& filename) {
+std::string obtain_dump_path(const std::string& filename) {
   std::error_code error;
   const std::filesystem::path path = std::filesystem::absolute(filename, error);
   return error ? filename : path.string();
@@ -137,7 +137,7 @@ void dump_views(const char* phase, const std::string& label,
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
   const kkf::ViewDumpResult result =
       kkf::dump_view_snapshot(snapshot, phase, label, kernel_id, invocation);
-  const std::string dump_path = absolute_dump_path(result.filename);
+  const std::string dump_path = obtain_dump_path(result.filename);
   if (!result.ok) {
     log_line("dump_failed phase=", phase, " path=\"", dump_path,
              "\" kernel_id=", kernel_id, " invocation=", invocation);
