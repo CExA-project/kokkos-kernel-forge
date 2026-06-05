@@ -1,5 +1,6 @@
 function(kkf_add_kernel_replayer TARGET_NAME)
   add_library("${TARGET_NAME}" kernel_replayer.cpp)
+  kkf_enable_warnings("${TARGET_NAME}")
   target_include_directories("${TARGET_NAME}" PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
   target_link_libraries("${TARGET_NAME}" PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl)
 endfunction()
