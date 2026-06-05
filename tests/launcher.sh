@@ -34,7 +34,7 @@ clean_exit() {
 # TODO: Make output comparison less dependent on Kokkos/runtime log formatting.
 # Prefer comparing only stable test result lines instead of filtering known log noise.
 clean_output() {
-  grep -vF "[kokkos-hooks]" "$1" \
+  grep -vF "[kkf-capture]" "$1" \
     | grep -vF "KokkosP:" \
     | grep -vF "-----------------------------------------------------------"
 }

@@ -19,11 +19,13 @@
 #include <atomic>
 #include <charconv>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <iostream>
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 
 #define KOKKOS_HOOKS_EXPORT __attribute__((visibility("default")))
@@ -97,7 +99,7 @@ std::string space_name(const Kokkos_Profiling_SpaceHandle& handle) {
 template <typename... Args>
 void log_line(Args&&... args) {
   std::lock_guard<std::mutex> lock(log_mutex);
-  std::cerr << "[kokkos-hooks] ";
+  std::cerr << "[kkf-capture] ";
   (std::cerr << ... << args);
   std::cerr << '\n';
 }
@@ -124,22 +126,27 @@ std::optional<std::uint64_t> parse_positive_uint64(std::string_view value) {
   return parsed;
 }
 
+std::string absolute_dump_path(const std::string& filename) {
+  std::error_code error;
+  const std::filesystem::path path = std::filesystem::absolute(filename, error);
+  return error ? filename : path.string();
+}
+
 void dump_views(const char* phase, const std::string& label,
                 const std::uint64_t kernel_id, const std::uint64_t invocation) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
   const kkf::ViewDumpResult result =
       kkf::dump_view_snapshot(snapshot, phase, label, kernel_id, invocation);
+  const std::string dump_path = absolute_dump_path(result.filename);
   if (!result.ok) {
-    log_line("view_dump_failed phase=", phase, " kernel_label=\"", label,
-             "\" id=", kernel_id, " invocation=", invocation, " file=\"",
-             result.filename, "\"");
+    log_line("dump_failed phase=", phase, " path=\"", dump_path,
+             "\" kernel_id=", kernel_id, " invocation=", invocation);
     return;
   }
 
-  log_line("view_dump phase=", phase, " kernel_label=\"", label,
-           "\" id=", kernel_id, " invocation=", invocation, " file=\"",
-           result.filename,
-           "\" active_allocations=", snapshot.allocations.size(),
+  log_line("dump_written phase=", phase, " path=\"", dump_path,
+           "\" kernel_id=", kernel_id, " invocation=", invocation,
+           " active_allocations=", snapshot.allocations.size(),
            " active_bytes=", snapshot.active_bytes);
 }
 
@@ -152,8 +159,8 @@ const void* allocation_data_pointer(const void* ptr) {
          KKF_KOKKOS_ALLOCATION_HEADER_SIZE;
 }
 
-void begin_kernel(const char* hook_name, const char* label,
-                  const std::uint32_t device_id, std::uint64_t* kernel_id) {
+void begin_kernel(const char* label, const std::uint32_t device_id,
+                  std::uint64_t* kernel_id) {
   const std::uint64_t id         = next_kernel_id.fetch_add(1);
   const std::string kernel_label = label_or_unknown(label);
   std::uint64_t invocation       = 0;
@@ -172,6 +179,8 @@ void begin_kernel(const char* hook_name, const char* label,
   }
 
   if (dump_this_kernel) {
+    log_line("kernel_selected label=\"", kernel_label,
+             "\" invocation=", invocation, " kernel_id=", id);
     Kokkos_Tools_toolInvokedFenceFunction fence = nullptr;
     {
       std::lock_guard<std::mutex> lock(state_mutex);
@@ -182,14 +191,9 @@ void begin_kernel(const char* hook_name, const char* label,
     }
     dump_views("in", kernel_label, id, invocation);
   }
-
-  if (is_user_label(label)) {
-    log_line(hook_name, " label=\"", kernel_label, "\" device=", device_id,
-             " id=", id, " invocation=", invocation);
-  }
 }
 
-void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
+void end_kernel(const std::uint64_t kernel_id) {
   std::string label                           = "<unknown>";
   std::uint32_t device_id                     = 0;
   std::uint64_t invocation                    = 0;
@@ -214,11 +218,6 @@ void end_kernel(const char* hook_name, const std::uint64_t kernel_id) {
     }
     dump_views("out", label, kernel_id, invocation);
   }
-
-  if (is_user_label(label.c_str())) {
-    log_line(hook_name, " label=\"", label, "\" id=", kernel_id,
-             " invocation=", invocation);
-  }
 }
 
 }  // namespace
@@ -231,34 +230,34 @@ KOKKOS_HOOKS_EXPORT int kernel_dump_tool_is_present = 0;
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {
-  begin_kernel("kokkosp_begin_parallel_for", label, device_id, kernel_id);
+  begin_kernel(label, device_id, kernel_id);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_for(
     const std::uint64_t kernel_id) {
-  end_kernel("kokkosp_end_parallel_for", kernel_id);
+  end_kernel(kernel_id);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_reduce(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {
-  begin_kernel("kokkosp_begin_parallel_reduce", label, device_id, kernel_id);
+  begin_kernel(label, device_id, kernel_id);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_reduce(
     const std::uint64_t kernel_id) {
-  end_kernel("kokkosp_end_parallel_reduce", kernel_id);
+  end_kernel(kernel_id);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_scan(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {
-  begin_kernel("kokkosp_begin_parallel_scan", label, device_id, kernel_id);
+  begin_kernel(label, device_id, kernel_id);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_end_parallel_scan(
     const std::uint64_t kernel_id) {
-  end_kernel("kokkosp_end_parallel_scan", kernel_id);
+  end_kernel(kernel_id);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc, char** argv) {
@@ -271,10 +270,6 @@ KOKKOS_HOOKS_EXPORT void kokkosp_parse_args(const int argc, char** argv) {
       const std::string_view value =
           argument.substr(dump_kernel_invocation_option.size());
       dump_kernel_invocation = parse_positive_uint64(value);
-      if (!dump_kernel_invocation.has_value()) {
-        log_line("invalid ", dump_kernel_invocation_option, " value=\"", value,
-                 "\"; expected a positive integer");
-      }
     }
   }
 }
@@ -290,45 +285,19 @@ KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
     allocation_tracker.record_allocation(allocation_label, allocation_space,
                                          ptr, p_data, size);
   }
-
-  if (is_user_label(label)) {
-    log_line("kokkosp_allocate_data allocation_create label=\"",
-             allocation_label, "\" space=\"", allocation_space, "\" ptr=", ptr,
-             " p_data=", p_data, " size=", size);
-  }
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_deallocate_data(
-    const Kokkos_Profiling_SpaceHandle space, const char* label,
-    const void* ptr, const std::uint64_t size) {
-  const std::string deallocation_label = label_or_unknown(label);
+    const Kokkos_Profiling_SpaceHandle space, const char*, const void* ptr,
+    const std::uint64_t) {
   const std::string deallocation_space = space_name(space);
 
   if (ptr != nullptr) {
     allocation_tracker.record_deallocation(deallocation_space, ptr);
   }
-
-  if (is_user_label(label)) {
-    log_line("kokkosp_deallocate_data allocation_destroy label=\"",
-             deallocation_label, "\" space=\"", deallocation_space,
-             "\" ptr=", ptr, " size=", size);
-  }
 }
 
-KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {
-  const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-
-  log_line("kokkosp_finalize_library allocation_summary active_allocations=",
-           snapshot.allocations.size(),
-           " active_bytes=", snapshot.active_bytes);
-
-  for (const kkf::ActiveAllocation& allocation : snapshot.allocations) {
-    log_line("outstanding_allocation label=\"", allocation.record.label,
-             "\" space=\"", allocation.record.space, "\" ptr=", allocation.ptr,
-             " p_data=", allocation.record.p_data,
-             " size=", allocation.record.size);
-  }
-}
+KOKKOS_HOOKS_EXPORT void kokkosp_finalize_library() {}
 
 KOKKOS_HOOKS_EXPORT void kokkosp_provide_tool_programming_interface(
     const std::uint32_t, Kokkos_Tools_ToolProgrammingInterface interface) {
