@@ -16,15 +16,17 @@ option(KKF_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
 add_library(kkf_warnings INTERFACE)
 
 if(KKF_ENABLE_WARNINGS)
-  target_compile_options(kkf_warnings INTERFACE $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-Wall;-Wextra;-Wpedantic>)
-
-  if(KKF_WARNINGS_AS_ERRORS)
-    target_compile_options(kkf_warnings INTERFACE $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-Werror>)
-  endif()
+  target_compile_options(
+    kkf_warnings INTERFACE "$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic>"
+  )
 endif()
 
 function(kkf_enable_warnings TARGET_NAME)
   target_link_libraries("${TARGET_NAME}" PRIVATE kkf_warnings)
+
+  if(KKF_WARNINGS_AS_ERRORS)
+    set_property(TARGET "${TARGET_NAME}" PROPERTY COMPILE_WARNING_AS_ERROR ON)
+  endif()
 endfunction()
 
 add_library(kkf_sanitizers INTERFACE)
