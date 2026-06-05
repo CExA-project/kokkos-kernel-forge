@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
+#include <string>
 #include <Kokkos_Core.hpp>
 #include "allocation.hpp"
 
@@ -48,6 +50,8 @@ class ScopeGuard {
   ScopeGuard& operator=(const ScopeGuard&) = delete;
   ~ScopeGuard();
 };
+
+std::optional<std::string> get_metadata(const std::string& key);
 
 template <class MemorySpace>
 void* get_allocation(const std::string& label) {

@@ -1,12 +1,13 @@
 #include <Kokkos_Core.hpp>
 #include <cassert>
-#include <iostream>
 #include <numeric>
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <vector>
+#include <unordered_map>
 
 #include <hdf5.h>
 #include <hdf5_hl.h>
@@ -95,6 +96,8 @@ static std::unordered_map<std::string, void*>* device_allocations;
 static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
     device_output_allocations;
 #endif
+
+static std::unordered_map<std::string, const std::string> metadata;
 
 void* get_allocation(impl::MemorySpaceType memory_space,
                      const std::string& label) {
@@ -252,6 +255,14 @@ herr_t get_hdf5_dataset_alloc_info(hid_t group, const char* name,
   return 0;
 }
 
+herr_t read_hdf5_metadata(hid_t group, const char* name, const H5A_info_t*,
+                          void*) {
+  std::string attr = get_hdf5_string_attribute(group, ".", name);
+  metadata.insert(
+      std::pair<std::string, const std::string>(name, std::move(attr)));
+  return 0;
+}
+
 herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
                              void* allocate_fun) {
   std::string label = get_hdf5_string_attribute(group, name, "label");
@@ -374,6 +385,10 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
                      impl::allocate_hdf5_dataset, &copy_data_wrapper,
                      H5P_DEFAULT);
 
+  idx = 0;
+  H5Aiterate_by_name(file, "metadata", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+                     impl::read_hdf5_metadata, nullptr, H5P_DEFAULT);
+
   H5Fclose(file);
 
   std::string_view hdf5_output_filename =
@@ -413,6 +428,14 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 }
 
 ScopeGuard::~ScopeGuard() {}
+
+std::optional<std::string> get_metadata(const std::string& key) {
+  try {
+    return impl::metadata.at(key);
+  } catch (const std::out_of_range&) {
+    return std::nullopt;
+  }
+}
 
 void ScopeGuard::allocate(impl::MemorySpaceType memory_space, char* address,
                           std::size_t size) {

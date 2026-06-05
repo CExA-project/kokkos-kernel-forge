@@ -6,7 +6,7 @@
 
 namespace cexa::kernel_replayer {
 namespace impl {
-bool check_kernel_dump_tool_is_present();
+bool init_kernel_tool_functions();
 }  // namespace impl
 
 /**
@@ -16,7 +16,7 @@ bool check_kernel_dump_tool_is_present();
 template <class Functor>
 Functor replay_functor(Functor&& functor) {
   static const bool kernel_dump_tool_is_present =
-      impl::check_kernel_dump_tool_is_present();
+      impl::init_kernel_tool_functions();
 
   if (kernel_dump_tool_is_present) {
     static std::optional<Kokkos::View<unsigned char*, Kokkos::HostSpace>>
@@ -32,4 +32,6 @@ Functor replay_functor(Functor&& functor) {
 
   return functor;
 }
+
+void add_metadata(const std::string& key, const std::string& value);
 }  // namespace cexa::kernel_replayer

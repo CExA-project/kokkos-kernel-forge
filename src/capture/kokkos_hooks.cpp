@@ -57,6 +57,7 @@ std::unordered_map<std::string, std::uint64_t> kernel_invocations;
 Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
 kkf::AllocationTracker allocation_tracker;
+std::unordered_map<std::string, std::string> metadata;
 
 std::string dump_kernel_label;
 std::optional<std::uint64_t> dump_kernel_invocation = 1;
@@ -131,8 +132,8 @@ std::string obtain_dump_path(const std::string& filename) {
 void dump_views(const char* phase, const std::string& label,
                 const std::uint64_t kernel_id, const std::uint64_t invocation) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-  const kkf::ViewDumpResult result =
-      kkf::dump_view_snapshot(snapshot, phase, label, kernel_id, invocation);
+  const kkf::ViewDumpResult result       = kkf::dump_view_snapshot(
+      snapshot, metadata, phase, label, kernel_id, invocation);
   const std::string dump_path = obtain_dump_path(result.filename);
   if (result.ok) {
     log_line("dump_written phase=", phase, " path=\"", dump_path,
@@ -218,9 +219,13 @@ void end_kernel(const std::uint64_t kernel_id) {
 }  // namespace
 
 extern "C" {
-// Variable used by the kernel extractor to detect the presence of the dumping
-// tool, we don't care about its value.
-KOKKOS_HOOKS_EXPORT int kernel_dump_tool_is_present = 0;
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_add_metadata(const char* key,
+                                                       const char* value,
+                                                       std::size_t size) {
+  // We use the (ptr, size) constructor to accommodate strings containing null
+  // characters
+  metadata[key] = std::string(value, size);
+}
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
     const char* label, const std::uint32_t device_id,
