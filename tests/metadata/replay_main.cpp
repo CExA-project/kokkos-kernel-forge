@@ -25,6 +25,8 @@ int main(int argc, char* argv[]) {
   CEXA_EXPECT(cexa::kernel_replayer::get_metadata("with null bytes").value(),
               std::string("hello\0world", 12));
   CEXA_EXPECT(cexa::kernel_replayer::get_metadata("n_iter").value(), "10");
+  CEXA_EXPECT(cexa::kernel_replayer::get_metadata("missing").has_value(),
+              false);
 
   int n_iter = std::stoi(cexa::kernel_replayer::get_metadata("n_iter").value());
 

@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <cstring>
+#include <string>
 #include <Kokkos_Core.hpp>
 
 namespace cexa::kernel_replayer {

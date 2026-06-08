@@ -3,11 +3,11 @@
 #include <dlfcn.h>
 #endif
 
-void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
-std::optional<bool> has_kernel_dump_tool = std::nullopt;
-
 namespace cexa::kernel_replayer {
 namespace impl {
+
+void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
+std::optional<bool> has_kernel_dump_tool = std::nullopt;
 
 bool init_kernel_tool_functions() {
   if (!has_kernel_dump_tool.has_value()) {
@@ -32,8 +32,9 @@ bool init_kernel_tool_functions() {
 }  // namespace impl
 
 void add_metadata(const std::string& key, const std::string& value) {
-  static const bool init_once = impl::init_kernel_tool_functions();
-  add_metadata_function(key.c_str(), value.c_str(), value.size());
+  [[maybe_unused]] static const bool init_once =
+      impl::init_kernel_tool_functions();
+  impl::add_metadata_function(key.c_str(), value.c_str(), value.size());
 }
 
 }  // namespace cexa::kernel_replayer
