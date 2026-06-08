@@ -82,7 +82,7 @@ void device_init() {
   }
 }
 
-static std::optional<std::vector<char>> functor_data;
+static std::vector<char> functor_data;
 
 namespace cexa::kernel_replayer {
 
@@ -142,7 +142,7 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
 }
 
 void init_functor(char* buffer, std::size_t size) {
-  std::memcpy(buffer, functor_data->data(), size);
+  std::memcpy(buffer, functor_data.data(), size);
 }
 
 char* allocate_host_buffer(std::size_t size, MemorySpaceType mem) {
@@ -288,23 +288,35 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
-  if (memory_space == MemorySpaceType::HOST &&
-      label == "kernel_replayer_functor" && !functor_data.has_value()) {
-    functor_data.emplace(buffer_size);
-    CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
-                                     H5T_NATIVE_UCHAR, functor_data->data()));
-  } else {
-    char* buffer = allocate_host_buffer(buffer_size, memory_space);
-    CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
-                                     H5T_NATIVE_UCHAR, buffer));
+  char* buffer = allocate_host_buffer(buffer_size, memory_space);
+  CHECK_HDF5_CALL(
+      H5LTread_dataset(group, dataset_name.c_str(), H5T_NATIVE_UCHAR, buffer));
 
-    (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(
-        label, space, address, buffer, buffer_size);
+  (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(label, space, address,
+                                                         buffer, buffer_size);
 
-    free_host_buffer(buffer, memory_space);
-  }
+  free_host_buffer(buffer, memory_space);
 
   return 0;
+}
+
+void read_functor_from_hdf5(hid_t file) {
+  int rank = 0;
+  CHECK_HDF5_CALL(H5LTget_dataset_ndims(file, "functor", &rank));
+  assert(rank == 1);
+
+  hsize_t dim = 0;
+  H5T_class_t datatype;
+  std::size_t datatype_size;
+  CHECK_HDF5_CALL(
+      H5LTget_dataset_info(file, "functor", &dim, &datatype, &datatype_size));
+  // We only deal with arrays of chars
+  assert(datatype == H5T_INTEGER);
+  assert(datatype_size == 1);
+
+  functor_data.resize(dim);
+  CHECK_HDF5_CALL(
+      H5LTread_dataset(file, "functor", H5T_NATIVE_UCHAR, functor_data.data()));
 }
 
 std::vector<std::pair<char*, std::size_t>> compute_allocations(
@@ -389,6 +401,8 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   H5Aiterate_by_name(file, "metadata", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
                      impl::read_hdf5_metadata, nullptr, H5P_DEFAULT);
 
+  impl::read_functor_from_hdf5(file);
+
   H5Fclose(file);
 
   std::string_view hdf5_output_filename =
@@ -413,10 +427,6 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
                        H5P_DEFAULT);
 
     H5Fclose(file);
-  }
-
-  if (!functor_data.has_value()) {
-    throw std::runtime_error("No functor found in the provided hdf5 file");
   }
 
   impl::host_allocations        = &host_allocations;

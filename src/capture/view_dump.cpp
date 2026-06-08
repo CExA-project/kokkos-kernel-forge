@@ -111,6 +111,27 @@ void write_int_attribute(hid_t object, const char* name, int value) {
   H5Sclose(space);
 }
 
+void write_dataset(hid_t group, const char* name,
+                   const std::vector<unsigned char>& bytes) {
+  const hsize_t dims[1] = {static_cast<hsize_t>(bytes.size())};
+  const hid_t space     = H5Screate_simple(1, dims, nullptr);
+  if (space < 0) {
+    return;
+  }
+
+  const hid_t dataset = H5Dcreate2(group, name, H5T_NATIVE_UCHAR, space,
+                                   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  if (dataset >= 0) {
+    if (!bytes.empty()) {
+      H5Dwrite(dataset, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT,
+               bytes.data());
+    }
+    H5Dclose(dataset);
+  }
+
+  H5Sclose(space);
+}
+
 void write_allocation_group(hid_t views_group,
                             const ActiveAllocation& allocation,
                             std::size_t index) {
@@ -138,24 +159,8 @@ void write_allocation_group(hid_t views_group,
     return;
   }
 
-  const hsize_t dims[1] = {static_cast<hsize_t>(bytes.size())};
-  const hid_t space     = H5Screate_simple(1, dims, nullptr);
-  if (space < 0) {
-    H5Gclose(group);
-    return;
-  }
+  write_dataset(group, "bytes", bytes);
 
-  const hid_t dataset = H5Dcreate2(group, "bytes", H5T_NATIVE_UCHAR, space,
-                                   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  if (dataset >= 0) {
-    if (!bytes.empty()) {
-      H5Dwrite(dataset, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT,
-               bytes.data());
-    }
-    H5Dclose(dataset);
-  }
-
-  H5Sclose(space);
   H5Gclose(group);
 }
 
@@ -163,6 +168,7 @@ void write_allocation_group(hid_t views_group,
 
 ViewDumpResult dump_view_snapshot(
     const AllocationSnapshot& snapshot,
+    const std::vector<unsigned char>& functor_data,
     const std::unordered_map<std::string, std::string>& metadata,
     std::string_view phase, std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation) {
@@ -201,6 +207,8 @@ ViewDumpResult dump_view_snapshot(
     }
     H5Gclose(metadata_group);
   }
+
+  write_dataset(file, "functor", functor_data);
 
   H5Fclose(file);
   result.ok = true;
