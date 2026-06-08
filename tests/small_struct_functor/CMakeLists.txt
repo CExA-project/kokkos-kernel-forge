@@ -1,8 +1,8 @@
-add_executable(small_struct_functor main.cpp)
+kkf_add_test_executable(small_struct_functor main.cpp)
 kkf_enable_sanitizers(small_struct_functor)
 target_link_libraries(small_struct_functor PRIVATE Kokkos::kokkos kernel_extractor)
 
-add_executable(small_struct_functor_replay replay_main.cpp)
+kkf_add_test_executable(small_struct_functor_replay replay_main.cpp)
 kkf_enable_sanitizers(small_struct_functor_replay)
 target_link_libraries(small_struct_functor_replay PRIVATE Kokkos::kokkos kernel_replayer_sanitized)
 
