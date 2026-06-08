@@ -1,7 +1,7 @@
-kkf_add_test_executable(multiple_views_capture main.cpp)
-target_link_libraries(multiple_views_capture PRIVATE kkf_sanitizers Kokkos::kokkos kernel_extractor)
+add_executable(multiple_views_capture main.cpp)
+target_link_libraries(multiple_views_capture PRIVATE kkf_warnings kkf_sanitizers Kokkos::kokkos kernel_extractor)
 
-kkf_add_test_executable(multiple_views_capture_replay replay_main.cpp)
-target_link_libraries(multiple_views_capture_replay PRIVATE Kokkos::kokkos kernel_replayer)
+add_executable(multiple_views_capture_replay replay_main.cpp)
+target_link_libraries(multiple_views_capture_replay PRIVATE kkf_warnings Kokkos::kokkos kernel_replayer)
 
 add_replay_test(multiple_views_capture "")

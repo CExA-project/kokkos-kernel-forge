@@ -8,11 +8,6 @@ function(kkf_set_test_working_directory TEST_NAME)
   set_tests_properties("${TEST_NAME}" PROPERTIES WORKING_DIRECTORY "${TEST_WORKING_DIRECTORY}")
 endfunction()
 
-function(kkf_add_test_executable TARGET_NAME)
-  add_executable("${TARGET_NAME}" ${ARGN})
-  target_link_libraries("${TARGET_NAME}" PRIVATE kkf_warnings)
-endfunction()
-
 function(add_replay_test TEST_NAME COMPARE_OUTPUT)
   add_test(NAME "${TEST_NAME}" COMMAND "${TEST_LAUNCHER}" $<TARGET_FILE:kkf_kokkos_hooks> $<TARGET_FILE:${TEST_NAME}>
                                        $<TARGET_FILE:${TEST_NAME}_replay> ${COMPARE_OUTPUT} ${ARGN}
