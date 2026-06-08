@@ -161,11 +161,11 @@ void write_allocation_group(hid_t views_group,
 
 }  // namespace
 
-ViewDumpResult dump_view_snapshot(const AllocationSnapshot& snapshot,
-                                  std::string_view phase,
-                                  std::string_view label,
-                                  std::uint64_t kernel_id,
-                                  std::uint64_t kernel_invocation) {
+ViewDumpResult dump_view_snapshot(
+    const AllocationSnapshot& snapshot,
+    const std::unordered_map<std::string, std::string>& metadata,
+    std::string_view phase, std::string_view label, std::uint64_t kernel_id,
+    std::uint64_t kernel_invocation) {
   ViewDumpResult result;
   result.filename = dump_filename(label, kernel_id, phase);
 
@@ -191,6 +191,15 @@ ViewDumpResult dump_view_snapshot(const AllocationSnapshot& snapshot,
       write_allocation_group(views_group, snapshot.allocations[i], i);
     }
     H5Gclose(views_group);
+  }
+
+  const hid_t metadata_group =
+      H5Gcreate2(file, "metadata", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  if (metadata_group >= 0) {
+    for (const auto& [key, value] : metadata) {
+      write_string_attribute(metadata_group, key.c_str(), value);
+    }
+    H5Gclose(metadata_group);
   }
 
   H5Fclose(file);
