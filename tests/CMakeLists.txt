@@ -10,7 +10,7 @@ endfunction()
 
 function(kkf_add_test_executable TARGET_NAME)
   add_executable("${TARGET_NAME}" ${ARGN})
-  kkf_enable_warnings("${TARGET_NAME}")
+  target_link_libraries("${TARGET_NAME}" PRIVATE kkf_warnings)
 endfunction()
 
 function(add_replay_test TEST_NAME COMPARE_OUTPUT)

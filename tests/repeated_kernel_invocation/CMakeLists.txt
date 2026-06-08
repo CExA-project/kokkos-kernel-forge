@@ -1,6 +1,5 @@
 kkf_add_test_executable(repeated_kernel_invocation main.cpp)
-kkf_enable_sanitizers(repeated_kernel_invocation)
-target_link_libraries(repeated_kernel_invocation PRIVATE Kokkos::kokkos kernel_extractor)
+target_link_libraries(repeated_kernel_invocation PRIVATE kkf_sanitizers Kokkos::kokkos kernel_extractor)
 
 kkf_add_test_executable(repeated_kernel_invocation_replay replay_main.cpp)
 target_link_libraries(repeated_kernel_invocation_replay PRIVATE Kokkos::kokkos kernel_replayer)
