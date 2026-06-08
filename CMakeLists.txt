@@ -9,13 +9,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(KKF_BUILD_EXAMPLES "Build kokkos-kernel-forge examples" ON)
 option(KKF_BUILD_TESTS "Build kokkos-kernel-forge tests" OFF)
 option(KKF_ENABLE_WARNINGS "Enable compiler warning options for kokkos-kernel-forge targets" ON)
-option(KKF_WARNINGS_AS_ERRORS "Treat kokkos-kernel-forge compiler warnings as errors" OFF)
 option(KKF_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
 option(KKF_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
-
-if(KKF_WARNINGS_AS_ERRORS)
-  set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
-endif()
 
 add_library(kkf_warnings INTERFACE)
 
