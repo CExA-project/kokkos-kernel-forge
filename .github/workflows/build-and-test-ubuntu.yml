@@ -1,4 +1,4 @@
-name: build-and-test
+name: build-and-test-ubuntu
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  cmake:
+  ubuntu:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -68,7 +68,7 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v6
 
-    - name: Install system dependencies
+    - name: Install Ubuntu dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
@@ -78,6 +78,9 @@ jobs:
           hdf5-tools \
           libhdf5-dev \
           ninja-build
+
+    - name: Set build parallelism
+      run: echo "JOBS=$(nproc)" >> "$GITHUB_ENV"
 
     - name: Compute Kokkos cache fingerprint
       run: |
@@ -113,7 +116,7 @@ jobs:
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
           -DKokkos_ENABLE_SERIAL=ON
-        cmake --build kokkos-build --parallel "$(nproc)"
+        cmake --build kokkos-build --parallel "$JOBS"
         cmake --install kokkos-build
 
     - name: Configure project
@@ -128,7 +131,7 @@ jobs:
           -DKKF_ENABLE_UBSAN="${{ matrix.kkf_enable_ubsan }}"
 
     - name: Build project
-      run: cmake --build build --parallel "$(nproc)"
+      run: cmake --build build --parallel "$JOBS"
 
     - name: Run tests
-      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.ctest_args }}
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$JOBS" ${{ matrix.ctest_args }}

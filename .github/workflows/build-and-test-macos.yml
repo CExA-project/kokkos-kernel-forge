@@ -1,0 +1,102 @@
+name: build-and-test-macos
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths-ignore:
+    - README.md
+    - docs/**
+  push:
+    branches:
+    - main
+    paths-ignore:
+    - README.md
+    - docs/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: AppleClang Release build and tests
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    env:
+      CXX: clang++
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-appleclang
+      KOKKOS_VERSION: 5.1.1
+      BUILD_TYPE: Release
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v6
+
+    - name: Install macOS dependencies
+      run: |
+        brew install \
+          cmake \
+          hdf5 \
+          ninja
+        echo "HDF5_ROOT=$(brew --prefix hdf5)" >> "$GITHUB_ENV"
+
+    - name: Set build parallelism
+      run: echo "JOBS=$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
+
+    - name: Compute Kokkos cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "ImageOS=${ImageOS:-unknown}"
+          echo "ImageVersion=${ImageVersion:-unknown}"
+          echo "KOKKOS_VERSION=$KOKKOS_VERSION"
+          echo "Kokkos_ENABLE_SERIAL=ON"
+          echo "compiler=appleclang"
+          echo "CMAKE_BUILD_TYPE=$BUILD_TYPE"
+          echo "CXX=$CXX"
+          "$CXX" --version
+          cmake --version
+          ninja --version
+        } > .kokkos-cache-fingerprint
+        cat .kokkos-cache-fingerprint
+
+    - name: Cache Kokkos install
+      id: cache-kokkos
+      uses: actions/cache@v5
+      with:
+        path: ${{ env.Kokkos_ROOT }}
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-appleclang-${{ hashFiles('.kokkos-cache-fingerprint') }}
+
+    - name: Build and install Kokkos
+      if: steps.cache-kokkos.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
+        cmake -S kokkos-src -B kokkos-build -G Ninja \
+          -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
+          -DKokkos_ENABLE_SERIAL=ON
+        cmake --build kokkos-build --parallel "$JOBS"
+        cmake --install kokkos-build
+
+    - name: Configure project
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+          -DKKF_BUILD_TESTS=ON \
+          -DKKF_ENABLE_WARNINGS=ON \
+          -DKKF_ENABLE_ASAN=OFF \
+          -DKKF_ENABLE_UBSAN=OFF
+
+    - name: Build project
+      run: cmake --build build --parallel "$JOBS"
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$JOBS"
