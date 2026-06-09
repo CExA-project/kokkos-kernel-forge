@@ -38,10 +38,7 @@ jobs:
 
     - name: Install macOS dependencies
       run: |
-        brew install \
-          cmake \
-          hdf5 \
-          ninja
+        brew install hdf5
         echo "HDF5_ROOT=$(brew --prefix hdf5)" >> "$GITHUB_ENV"
 
     - name: Set build parallelism
