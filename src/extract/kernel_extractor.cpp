@@ -3,6 +3,8 @@
 #include <dlfcn.h>
 #endif
 
+#include <optional>
+
 namespace cexa::kernel_replayer {
 namespace impl {
 
