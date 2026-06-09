@@ -19,6 +19,7 @@
 #include <atomic>
 #include <charconv>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <optional>
 #include <iostream>
@@ -27,6 +28,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
+#include <vector>
 
 #define KOKKOS_HOOKS_EXPORT __attribute__((visibility("default")))
 
@@ -57,6 +59,7 @@ std::unordered_map<std::string, std::uint64_t> kernel_invocations;
 Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
 kkf::AllocationTracker allocation_tracker;
+std::vector<unsigned char> functor_data;
 std::unordered_map<std::string, std::string> metadata;
 
 std::string dump_kernel_label;
@@ -133,7 +136,7 @@ void dump_views(const char* phase, const std::string& label,
                 const std::uint64_t kernel_id, const std::uint64_t invocation) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
   const kkf::ViewDumpResult result       = kkf::dump_view_snapshot(
-      snapshot, metadata, phase, label, kernel_id, invocation);
+      snapshot, functor_data, metadata, phase, label, kernel_id, invocation);
   const std::string dump_path = obtain_dump_path(result.filename);
   if (result.ok) {
     log_line("dump_written phase=", phase, " path=\"", dump_path,
@@ -225,6 +228,12 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_add_metadata(const char* key,
   // We use the (ptr, size) constructor to accommodate strings containing null
   // characters
   metadata[key] = std::string(value, size);
+}
+
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_functor(
+    const unsigned char* data, std::size_t size) {
+  functor_data.resize(size);
+  std::memcpy(functor_data.data(), data, size);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
