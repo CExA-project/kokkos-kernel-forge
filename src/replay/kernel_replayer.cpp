@@ -142,6 +142,13 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
 }
 
 void init_functor(char* buffer, std::size_t size) {
+  if (functor_data.size() < size) {
+    throw std::runtime_error(
+        "The stored functor is smaller then the requested functor, expected at "
+        "most " +
+        std::to_string(functor_data.size()) + "B, got " + std::to_string(size) +
+        "B");
+  }
   std::memcpy(buffer, functor_data.data(), size);
 }
 
