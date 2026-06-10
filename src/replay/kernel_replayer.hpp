@@ -139,6 +139,11 @@ Functor replay_functor(const Functor& functor) {
   }
   Functor* tmp_functor     = new (tmp_buffer) Functor(functor);
   void* tmp_functor_buffer = std::malloc(N);
+  if (tmp_functor_buffer == nullptr) {
+    tmp_functor->~Functor();
+    std::free(tmp_buffer);
+    throw std::bad_alloc();
+  }
   std::memcpy(tmp_functor_buffer, tmp_buffer, N);
 
   std::size_t copy_length = N;
