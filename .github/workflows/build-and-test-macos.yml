@@ -22,15 +22,37 @@ concurrency:
 
 jobs:
   macos:
-    name: AppleClang Release build and tests
+    name: ${{ matrix.name }}
     runs-on: macos-latest
     timeout-minutes: 30
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: AppleClang Release build and tests
+          compiler: appleclang
+          build_type: Release
+          kkf_enable_asan: OFF
+          kkf_enable_ubsan: OFF
+          ctest_args: ''
+        - name: AppleClang ASan build and tests
+          compiler: appleclang-asan
+          build_type: RelWithDebInfo
+          kkf_enable_asan: ON
+          kkf_enable_ubsan: OFF
+          ctest_args: -L sanitizer_compatible
+        - name: AppleClang UBSan build and tests
+          compiler: appleclang-ubsan
+          build_type: RelWithDebInfo
+          kkf_enable_asan: OFF
+          kkf_enable_ubsan: ON
+          ctest_args: -L sanitizer_compatible
+
     env:
       CXX: clang++
-      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-appleclang
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
       KOKKOS_VERSION: 5.1.1
-      BUILD_TYPE: Release
 
     steps:
     - name: Check out repository
@@ -53,8 +75,8 @@ jobs:
           echo "ImageVersion=${ImageVersion:-unknown}"
           echo "KOKKOS_VERSION=$KOKKOS_VERSION"
           echo "Kokkos_ENABLE_SERIAL=ON"
-          echo "compiler=appleclang"
-          echo "CMAKE_BUILD_TYPE=$BUILD_TYPE"
+          echo "matrix.compiler=${{ matrix.compiler }}"
+          echo "CMAKE_BUILD_TYPE=${{ matrix.build_type }}"
           echo "CXX=$CXX"
           "$CXX" --version
           cmake --version
@@ -67,14 +89,14 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-appleclang-${{ hashFiles('.kokkos-cache-fingerprint') }}
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
         cmake -S kokkos-src -B kokkos-build -G Ninja \
-          -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+          -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
           -DKokkos_ENABLE_SERIAL=ON
@@ -84,16 +106,16 @@ jobs:
     - name: Configure project
       run: |
         cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+          -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DKKF_BUILD_TESTS=ON \
           -DKKF_ENABLE_WARNINGS=ON \
-          -DKKF_ENABLE_ASAN=OFF \
-          -DKKF_ENABLE_UBSAN=OFF
+          -DKKF_ENABLE_ASAN="${{ matrix.kkf_enable_asan }}" \
+          -DKKF_ENABLE_UBSAN="${{ matrix.kkf_enable_ubsan }}"
 
     - name: Build project
       run: cmake --build build --parallel "$JOBS"
 
     - name: Run tests
-      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$JOBS"
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$JOBS" ${{ matrix.ctest_args }}
