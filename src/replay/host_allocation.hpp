@@ -2,11 +2,30 @@
 
 #include <unistd.h>
 #include <sys/mman.h>
+
+#if defined(__APPLE__) && defined(__MACH__)
+#define KKF_USE_MACH_VM 1
+#else
+#define KKF_USE_MACH_VM 0
+#endif
+
+#if KKF_USE_MACH_VM
+#include <mach/mach.h>
+#include <mach/mach_error.h>
+#include <mach/mach_vm.h>
+#include <mach/vm_statistics.h>
+#endif
+
 #include <Kokkos_Core.hpp>
+#include <cassert>
 #include <cerrno>
+#include <cstdlib>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
+#include <stdexcept>
+#include <string>
 #include <tuple>
 
 namespace cexa::kernel_replayer::impl {
@@ -29,6 +48,31 @@ inline std::tuple<void*, std::size_t> host_allocate(void* aligned_address,
              host_allocation_granularity() ==
          0);
 
+#if KKF_USE_MACH_VM
+  mach_vm_address_t address = static_cast<mach_vm_address_t>(
+      reinterpret_cast<std::uintptr_t>(aligned_address));
+  mach_vm_size_t mach_size = static_cast<mach_vm_size_t>(size);
+
+  kern_return_t status =
+      mach_vm_allocate(mach_task_self(), &address, mach_size, VM_FLAGS_FIXED);
+
+  if (status != KERN_SUCCESS) {
+    if (status == KERN_NO_SPACE) {
+      throw std::runtime_error(
+          "Failed to allocate to a predefined host address");
+    } else {
+      throw std::runtime_error(
+          "Unknown error when trying to allocate to a predefined host "
+          "address: " +
+          std::string(mach_error_string(status)));
+    }
+  } else if (reinterpret_cast<void*>(address) != aligned_address) {
+    mach_vm_deallocate(mach_task_self(), address, mach_size);
+    throw std::runtime_error("Failed to allocate to a predefined host address");
+  }
+
+  return std::make_tuple(reinterpret_cast<void*>(address), size);
+#else
   void* address =
       mmap(aligned_address, size, PROT_READ | PROT_WRITE,
            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
@@ -53,10 +97,20 @@ inline std::tuple<void*, std::size_t> host_allocate(void* aligned_address,
   }
 
   return std::make_tuple(address, size);
+#endif
 }
 
 inline void host_deallocate(void* address, std::size_t size) {
+#if KKF_USE_MACH_VM
+  mach_vm_deallocate(
+      mach_task_self(),
+      static_cast<mach_vm_address_t>(reinterpret_cast<std::uintptr_t>(address)),
+      static_cast<mach_vm_size_t>(size));
+#else
   munmap(address, size);
+#endif
 }
 
 }  // namespace cexa::kernel_replayer::impl
+
+#undef KKF_USE_MACH_VM
