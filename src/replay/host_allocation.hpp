@@ -49,24 +49,28 @@ inline std::tuple<void*, std::size_t> host_allocate(void* aligned_address,
          0);
 
 #if KKF_USE_MACH_VM
+  // The replayer must recreate Host allocations at the exact captured virtual
+  // address because Kokkos::View pointers are stored inside the captured
+  // functor. On macOS, the target range may already be reserved by the process
+  // allocator.
   mach_vm_address_t address = static_cast<mach_vm_address_t>(
       reinterpret_cast<std::uintptr_t>(aligned_address));
-  mach_vm_size_t mach_size = static_cast<mach_vm_size_t>(size);
+  const mach_vm_address_t requested_address = address;
+  const mach_vm_size_t mach_size            = static_cast<mach_vm_size_t>(size);
 
   kern_return_t status =
-      mach_vm_allocate(mach_task_self(), &address, mach_size, VM_FLAGS_FIXED);
+      mach_vm_map(mach_task_self(), &address, mach_size, 0,
+                  VM_FLAGS_FIXED | VM_FLAGS_OVERWRITE, MEMORY_OBJECT_NULL, 0,
+                  FALSE, VM_PROT_READ | VM_PROT_WRITE,
+                  VM_PROT_READ | VM_PROT_WRITE, VM_INHERIT_DEFAULT);
 
   if (status != KERN_SUCCESS) {
-    if (status == KERN_NO_SPACE) {
-      throw std::runtime_error(
-          "Failed to allocate to a predefined host address");
-    } else {
-      throw std::runtime_error(
-          "Unknown error when trying to allocate to a predefined host "
-          "address: " +
-          std::string(mach_error_string(status)));
-    }
-  } else if (reinterpret_cast<void*>(address) != aligned_address) {
+    throw std::runtime_error(
+        "Failed to allocate to a predefined host address: " +
+        std::string(mach_error_string(status)));
+  }
+
+  if (address != requested_address) {
     mach_vm_deallocate(mach_task_self(), address, mach_size);
     throw std::runtime_error("Failed to allocate to a predefined host address");
   }
