@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <optional>
 #include <string>
 #include <Kokkos_Core.hpp>
@@ -127,7 +128,15 @@ Functor replay_functor(const Functor& functor) {
   // - return f
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
 
-  void* tmp_buffer         = std::aligned_alloc(alignof(Functor), N);
+  constexpr std::size_t alignment =
+      alignof(Functor) > alignof(void*) ? alignof(Functor) : alignof(void*);
+  constexpr std::size_t allocation_size =
+      ((N + alignment - 1) / alignment) * alignment;
+
+  void* tmp_buffer = std::aligned_alloc(alignment, allocation_size);
+  if (tmp_buffer == nullptr) {
+    throw std::bad_alloc();
+  }
   Functor* tmp_functor     = new (tmp_buffer) Functor(functor);
   void* tmp_functor_buffer = std::malloc(N);
   std::memcpy(tmp_functor_buffer, tmp_buffer, N);
