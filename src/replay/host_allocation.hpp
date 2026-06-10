@@ -52,7 +52,8 @@ inline std::tuple<void*, std::size_t> host_allocate(void* aligned_address,
   // The replayer must recreate Host allocations at the exact captured virtual
   // address because Kokkos::View pointers are stored inside the captured
   // functor. On macOS, the target range may already be reserved by the process
-  // allocator.
+  // allocator, so use Mach overwrite semantics for this short-lived replay
+  // mapping.
   mach_vm_address_t address = static_cast<mach_vm_address_t>(
       reinterpret_cast<std::uintptr_t>(aligned_address));
   const mach_vm_address_t requested_address = address;
