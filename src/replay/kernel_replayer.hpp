@@ -126,6 +126,7 @@ Functor replay_functor(const Functor& functor) {
   //   a segfault once they are destroyed
   // - memcpy the old data of the temporary functor back and properly destroy it
   // - return f
+  // TODO make this RAII 
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
 
   constexpr std::size_t alignment =
@@ -161,6 +162,7 @@ Functor replay_functor(const Functor& functor) {
   tmp_functor->~Functor();
   std::free(tmp_buffer);
 
+  // TODO make this RAII 
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
 
   return f;
