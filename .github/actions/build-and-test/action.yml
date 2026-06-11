@@ -1,0 +1,120 @@
+name: Build and test
+description: Build Kokkos, configure kokkos-kernel-forge, and run tests.
+
+inputs:
+  cxx:
+    description: C++ compiler executable.
+    required: true
+  kokkos-root:
+    description: Kokkos installation prefix.
+    required: true
+  kokkos-version:
+    description: Kokkos version to build.
+    required: false
+    default: '5.1.1'
+  compiler:
+    description: Compiler/cache variant name.
+    required: true
+  build-type:
+    description: CMake build type.
+    required: true
+  kkf-enable-asan:
+    description: Whether to enable KKF AddressSanitizer instrumentation.
+    required: true
+  kkf-enable-ubsan:
+    description: Whether to enable KKF UndefinedBehaviorSanitizer instrumentation.
+    required: true
+  ctest-args:
+    description: Extra arguments passed to ctest.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+  - name: Validate build environment
+    shell: bash
+    run: |
+      : "${JOBS:?JOBS must be set before running this action}"
+
+  - name: Compute Kokkos cache fingerprint
+    shell: bash
+    env:
+      BUILD_TYPE: ${{ inputs.build-type }}
+      COMPILER: ${{ inputs.compiler }}
+      CXX: ${{ inputs.cxx }}
+      KOKKOS_VERSION: ${{ inputs.kokkos-version }}
+    run: |
+      {
+        echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+        echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+        echo "ImageOS=${ImageOS:-unknown}"
+        echo "ImageVersion=${ImageVersion:-unknown}"
+        echo "KOKKOS_VERSION=$KOKKOS_VERSION"
+        echo "Kokkos_ENABLE_SERIAL=ON"
+        echo "matrix.compiler=$COMPILER"
+        echo "CMAKE_BUILD_TYPE=$BUILD_TYPE"
+        echo "CXX=$CXX"
+        "$CXX" --version
+        cmake --version
+        ninja --version
+      } > .kokkos-cache-fingerprint
+      cat .kokkos-cache-fingerprint
+
+  - name: Cache Kokkos install
+    id: cache-kokkos
+    uses: actions/cache@v5
+    with:
+      path: ${{ inputs.kokkos-root }}
+      key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ inputs.kokkos-version }}-${{ inputs.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+
+  - name: Build and install Kokkos
+    if: steps.cache-kokkos.outputs.cache-hit != 'true'
+    shell: bash
+    env:
+      BUILD_TYPE: ${{ inputs.build-type }}
+      CXX: ${{ inputs.cxx }}
+      Kokkos_ROOT: ${{ inputs.kokkos-root }}
+      KOKKOS_VERSION: ${{ inputs.kokkos-version }}
+    run: |
+      git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
+      cmake -S kokkos-src -B kokkos-build -G Ninja \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_CXX_COMPILER="$CXX" \
+        -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
+        -DKokkos_ENABLE_SERIAL=ON
+      cmake --build kokkos-build --parallel "$JOBS"
+      cmake --install kokkos-build
+
+  - name: Configure project
+    shell: bash
+    env:
+      BUILD_TYPE: ${{ inputs.build-type }}
+      CXX: ${{ inputs.cxx }}
+      KKF_ENABLE_ASAN: ${{ inputs.kkf-enable-asan }}
+      KKF_ENABLE_UBSAN: ${{ inputs.kkf-enable-ubsan }}
+      Kokkos_ROOT: ${{ inputs.kokkos-root }}
+    run: |
+      cmake -S . -B build -G Ninja \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_CXX_COMPILER="$CXX" \
+        -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+        -DKKF_BUILD_TESTS=ON \
+        -DKKF_ENABLE_WARNINGS=ON \
+        -DKKF_ENABLE_ASAN="$KKF_ENABLE_ASAN" \
+        -DKKF_ENABLE_UBSAN="$KKF_ENABLE_UBSAN"
+
+  - name: Build project
+    shell: bash
+    run: cmake --build build --parallel "$JOBS"
+
+  - name: Run tests
+    shell: bash
+    env:
+      CTEST_ARGS: ${{ inputs.ctest-args }}
+    run: |
+      extra_ctest_args=()
+      if [ -n "$CTEST_ARGS" ]; then
+        read -r -a extra_ctest_args <<< "$CTEST_ARGS"
+      fi
+      ctest --test-dir build --output-on-failure --no-tests=error --parallel "$JOBS" "${extra_ctest_args[@]}"
