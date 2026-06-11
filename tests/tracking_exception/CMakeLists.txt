@@ -1,7 +1,5 @@
 add_executable(tracking_exception main.cpp)
-target_link_libraries(
-  tracking_exception PRIVATE kkf_warnings kkf_sanitizers Kokkos::kokkos kernel_replayer_sanitized
-)
+target_link_libraries(tracking_exception PRIVATE kkf_warnings kkf_sanitizers Kokkos::kokkos kernel_replayer_sanitized)
 
 add_test(NAME tracking_exception COMMAND tracking_exception)
 set_tests_properties(tracking_exception PROPERTIES LABELS "replay;sanitizer_compatible")
