@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -129,10 +130,19 @@ Functor replay_functor(const Functor& functor) {
   // TODO make this RAII
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
 
-  void* tmp_buffer = std::aligned_alloc(alignof(Functor), N);
+  void* tmp_buffer = nullptr;
+
+  // aligned_alloc with alignment < sizeof(void*) fails on macOS
+  if constexpr (alignof(Functor) <= alignof(std::max_align_t)) {
+    tmp_buffer = std::malloc(N);
+  } else {
+    tmp_buffer = std::aligned_alloc(alignof(Functor), N);
+  }
+
   if (tmp_buffer == nullptr) {
     throw std::bad_alloc();
   }
+
   Functor* tmp_functor     = new (tmp_buffer) Functor(functor);
   void* tmp_functor_buffer = std::malloc(N);
   if (tmp_functor_buffer == nullptr) {
