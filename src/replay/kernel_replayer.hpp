@@ -129,12 +129,7 @@ Functor replay_functor(const Functor& functor) {
   // TODO make this RAII
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
 
-  constexpr std::size_t alignment =
-      alignof(Functor) > alignof(void*) ? alignof(Functor) : alignof(void*);
-  constexpr std::size_t allocation_size =
-      ((N + alignment - 1) / alignment) * alignment;
-
-  void* tmp_buffer = std::aligned_alloc(alignment, allocation_size);
+  void* tmp_buffer = std::aligned_alloc(alignof(Functor), N);
   if (tmp_buffer == nullptr) {
     throw std::bad_alloc();
   }
