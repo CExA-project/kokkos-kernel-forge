@@ -13,6 +13,7 @@ namespace kkf {
 struct ViewDumpResult {
   bool ok = false;
   std::string filename;
+  std::string error;
 };
 
 ViewDumpResult dump_view_snapshot(

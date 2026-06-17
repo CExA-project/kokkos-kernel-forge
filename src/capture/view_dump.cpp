@@ -5,6 +5,7 @@
 
 #include <cctype>
 #include <cstddef>
+#include <exception>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -194,8 +195,12 @@ ViewDumpResult dump_view_snapshot(
 
     file.close_checked();
     result.ok = true;
+  } catch (const std::exception& error) {
+    result.ok    = false;
+    result.error = error.what();
   } catch (...) {
-    result.ok = false;
+    result.ok    = false;
+    result.error = "unknown non-standard exception";
   }
   return result;
 }
