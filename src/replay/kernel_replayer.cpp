@@ -2,7 +2,6 @@
 #include <cassert>
 #include <numeric>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -13,6 +12,7 @@
 #include <hdf5_hl.h>
 
 #include "kernel_replayer.hpp"
+#include "hdf5_utils.hpp"
 #include "allocation.hpp"
 #include "memory_space_type.hpp"
 
@@ -178,21 +178,6 @@ void free_host_buffer(char* ptr, MemorySpaceType mem) {
   }
 }
 
-void check_hdf5_call(herr_t status, const char* expr, const char* file,
-                     int line) {
-  if (status >= 0) {
-    return;
-  }
-
-  std::stringstream os;
-  os << file << ":" << line << ": "
-     << "The call " << expr << " failed";
-  throw std::runtime_error(os.str());
-}
-
-#define CHECK_HDF5_CALL(expr) \
-  cexa::kernel_replayer::impl::check_hdf5_call(expr, #expr, __FILE__, __LINE__);
-
 using hdf5_iterate_fun_t = std::function<void(std::string, std::string_view,
                                               char*, char*, std::size_t)>;
 
@@ -208,12 +193,13 @@ std::string get_hdf5_string_attribute(hid_t group, const char* name,
 
   H5A_info_t attr_info;
   CHECK_HDF5_CALL(H5Aget_info(attr_id, &attr_info));
-  hid_t type = H5Aget_type(attr_id);
+  hid_t type = CHECK_HDF5_ID(H5Aget_type(attr_id));
   std::string attribute(attr_info.data_size, '\0');
   CHECK_HDF5_CALL(H5Aread(attr_id, type, attribute.data()));
 
   // remove the null-terminator
   attribute.pop_back();
+  CHECK_HDF5_CALL(H5Tclose(type));
   CHECK_HDF5_CALL(H5Aclose(attr_id));
 
   return attribute;
@@ -372,9 +358,9 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   std::set<std::pair<char*, std::size_t>> allocation_sets[2];
 
   hsize_t idx = 0;
-  H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                     impl::get_hdf5_dataset_alloc_info, allocation_sets,
-                     H5P_DEFAULT);
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::get_hdf5_dataset_alloc_info, allocation_sets, H5P_DEFAULT));
 
   for (auto [address, size] : impl::compute_allocations(allocation_sets[0])) {
     allocate(impl::MemorySpaceType::HOST, address, size);
@@ -400,17 +386,18 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
       };
 
   idx = 0;
-  H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                     impl::allocate_hdf5_dataset, &copy_data_wrapper,
-                     H5P_DEFAULT);
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::allocate_hdf5_dataset, &copy_data_wrapper, H5P_DEFAULT));
 
   idx = 0;
-  H5Aiterate_by_name(file, "metadata", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                     impl::read_hdf5_metadata, nullptr, H5P_DEFAULT);
+  CHECK_HDF5_CALL(
+      H5Aiterate_by_name(file, "metadata", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+                         impl::read_hdf5_metadata, nullptr, H5P_DEFAULT));
 
   impl::read_functor_from_hdf5(file);
 
-  H5Fclose(file);
+  CHECK_HDF5_CALL(H5Fclose(file));
 
   std::string_view hdf5_output_filename =
       find_flag_argument(argc, argv, "--kernel-replayer-out-dump");
@@ -429,11 +416,11 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
         };
 
     hsize_t idx = 0;
-    H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                       impl::allocate_hdf5_dataset, &allocate_wrapper,
-                       H5P_DEFAULT);
+    CHECK_HDF5_CALL(H5Literate_by_name(
+        file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+        impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
 
-    H5Fclose(file);
+    CHECK_HDF5_CALL(H5Fclose(file));
   }
 
   impl::host_allocations        = &host_allocations;

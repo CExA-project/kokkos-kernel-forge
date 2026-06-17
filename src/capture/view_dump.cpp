@@ -1,8 +1,7 @@
 #include "view_dump.hpp"
 
+#include "hdf5_utils.hpp"
 #include "memory_copy.hpp"
-
-#include <hdf5.h>
 
 #include <cctype>
 #include <cstddef>
@@ -15,6 +14,7 @@ namespace kkf {
 namespace {
 
 std::mutex dump_mutex;
+using Hdf5Handle = hdf5::ScopedHandle;
 
 std::string pointer_to_string(const void* ptr) {
   std::ostringstream stream;
@@ -52,84 +52,67 @@ std::string dump_filename(std::string_view label, std::uint64_t kernel_id,
 void write_string_attribute(hid_t object, const char* name,
                             std::string_view value) {
   const std::string text(value);
-  const hid_t type = H5Tcopy(H5T_C_S1);
-  if (type < 0) {
-    return;
-  }
+  Hdf5Handle type(CHECK_HDF5_ID(H5Tcopy(H5T_C_S1)), H5Tclose);
 
   const std::size_t size = text.empty() ? 1 : text.size() + 1;
-  H5Tset_size(type, size);
-  H5Tset_strpad(type, H5T_STR_NULLTERM);
+  CHECK_HDF5_CALL(H5Tset_size(type.get(), size));
+  CHECK_HDF5_CALL(H5Tset_strpad(type.get(), H5T_STR_NULLTERM));
 
-  const hid_t space = H5Screate(H5S_SCALAR);
-  if (space < 0) {
-    H5Tclose(type);
-    return;
-  }
+  Hdf5Handle space(CHECK_HDF5_ID(H5Screate(H5S_SCALAR)), H5Sclose);
+  Hdf5Handle attr(
+      CHECK_HDF5_ID(H5Acreate2(object, name, type.get(), space.get(),
+                               H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
+  CHECK_HDF5_CALL(H5Awrite(attr.get(), type.get(), text.c_str()));
 
-  const hid_t attr =
-      H5Acreate2(object, name, type, space, H5P_DEFAULT, H5P_DEFAULT);
-  if (attr >= 0) {
-    H5Awrite(attr, type, text.c_str());
-    H5Aclose(attr);
-  }
-
-  H5Sclose(space);
-  H5Tclose(type);
+  attr.close_checked();
+  space.close_checked();
+  type.close_checked();
 }
 
 void write_uint64_attribute(hid_t object, const char* name,
                             std::uint64_t value) {
-  const hid_t space = H5Screate(H5S_SCALAR);
-  if (space < 0) {
-    return;
-  }
+  Hdf5Handle space(CHECK_HDF5_ID(H5Screate(H5S_SCALAR)), H5Sclose);
+  Hdf5Handle attr(
+      CHECK_HDF5_ID(H5Acreate2(object, name, H5T_NATIVE_UINT64, space.get(),
+                               H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
 
-  const hid_t attr = H5Acreate2(object, name, H5T_NATIVE_UINT64, space,
-                                H5P_DEFAULT, H5P_DEFAULT);
-  if (attr >= 0) {
-    H5Awrite(attr, H5T_NATIVE_UINT64, &value);
-    H5Aclose(attr);
-  }
+  CHECK_HDF5_CALL(H5Awrite(attr.get(), H5T_NATIVE_UINT64, &value));
 
-  H5Sclose(space);
+  attr.close_checked();
+  space.close_checked();
 }
 
 void write_int_attribute(hid_t object, const char* name, int value) {
-  const hid_t space = H5Screate(H5S_SCALAR);
-  if (space < 0) {
-    return;
-  }
+  Hdf5Handle space(CHECK_HDF5_ID(H5Screate(H5S_SCALAR)), H5Sclose);
+  Hdf5Handle attr(
+      CHECK_HDF5_ID(H5Acreate2(object, name, H5T_NATIVE_INT, space.get(),
+                               H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
 
-  const hid_t attr =
-      H5Acreate2(object, name, H5T_NATIVE_INT, space, H5P_DEFAULT, H5P_DEFAULT);
-  if (attr >= 0) {
-    H5Awrite(attr, H5T_NATIVE_INT, &value);
-    H5Aclose(attr);
-  }
+  CHECK_HDF5_CALL(H5Awrite(attr.get(), H5T_NATIVE_INT, &value));
 
-  H5Sclose(space);
+  attr.close_checked();
+  space.close_checked();
 }
 
 void write_dataset(hid_t group, const char* name,
                    const std::vector<unsigned char>& bytes) {
   const hsize_t dims[1] = {static_cast<hsize_t>(bytes.size())};
-  const hid_t space     = H5Screate_simple(1, dims, nullptr);
-  if (space < 0) {
-    return;
+  Hdf5Handle space(CHECK_HDF5_ID(H5Screate_simple(1, dims, nullptr)), H5Sclose);
+  Hdf5Handle dataset(
+      CHECK_HDF5_ID(H5Dcreate2(group, name, H5T_NATIVE_UCHAR, space.get(),
+                               H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Dclose);
+
+  if (!bytes.empty()) {
+    CHECK_HDF5_CALL(H5Dwrite(dataset.get(), H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL,
+                             H5P_DEFAULT, bytes.data()));
   }
 
-  const hid_t dataset = H5Dcreate2(group, name, H5T_NATIVE_UCHAR, space,
-                                   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  if (dataset >= 0) {
-    if (!bytes.empty()) {
-      H5Dwrite(dataset, H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT,
-               bytes.data());
-    }
-    H5Dclose(dataset);
-  }
-
-  H5Sclose(space);
+  dataset.close_checked();
+  space.close_checked();
 }
 
 void write_allocation_group(hid_t views_group,
@@ -137,31 +120,30 @@ void write_allocation_group(hid_t views_group,
                             std::size_t index) {
   const std::string group_name = "view_" + std::to_string(index) + "_" +
                                  sanitize_name(allocation.record.label);
-  const hid_t group = H5Gcreate2(views_group, group_name.c_str(), H5P_DEFAULT,
-                                 H5P_DEFAULT, H5P_DEFAULT);
-  if (group < 0) {
-    return;
-  }
+  Hdf5Handle group(
+      CHECK_HDF5_ID(H5Gcreate2(views_group, group_name.c_str(), H5P_DEFAULT,
+                               H5P_DEFAULT, H5P_DEFAULT)),
+      H5Gclose);
 
-  write_string_attribute(group, "label", allocation.record.label);
-  write_string_attribute(group, "space", allocation.record.space);
-  write_string_attribute(group, "ptr", pointer_to_string(allocation.ptr));
-  write_string_attribute(group, "p_data",
+  write_string_attribute(group.get(), "label", allocation.record.label);
+  write_string_attribute(group.get(), "space", allocation.record.space);
+  write_string_attribute(group.get(), "ptr", pointer_to_string(allocation.ptr));
+  write_string_attribute(group.get(), "p_data",
                          pointer_to_string(allocation.record.p_data));
-  write_uint64_attribute(group, "size", allocation.record.size);
+  write_uint64_attribute(group.get(), "size", allocation.record.size);
 
   std::vector<unsigned char> bytes;
   const std::string skip_reason = copy_allocation_bytes(allocation, bytes);
-  write_int_attribute(group, "bytes_dumped", skip_reason.empty() ? 1 : 0);
+  write_int_attribute(group.get(), "bytes_dumped", skip_reason.empty() ? 1 : 0);
   if (!skip_reason.empty()) {
-    write_string_attribute(group, "skip_reason", skip_reason);
-    H5Gclose(group);
+    write_string_attribute(group.get(), "skip_reason", skip_reason);
+    group.close_checked();
     return;
   }
 
-  write_dataset(group, "bytes", bytes);
+  write_dataset(group.get(), "bytes", bytes);
 
-  H5Gclose(group);
+  group.close_checked();
 }
 
 }  // namespace
@@ -176,42 +158,45 @@ ViewDumpResult dump_view_snapshot(
   result.filename = dump_filename(label, kernel_id, phase);
 
   std::lock_guard<std::mutex> lock(dump_mutex);
-  const hid_t file = H5Fcreate(result.filename.c_str(), H5F_ACC_TRUNC,
-                               H5P_DEFAULT, H5P_DEFAULT);
-  if (file < 0) {
-    return result;
-  }
+  try {
+    Hdf5Handle file(
+        CHECK_HDF5_ID(H5Fcreate(result.filename.c_str(), H5F_ACC_TRUNC,
+                                H5P_DEFAULT, H5P_DEFAULT)),
+        H5Fclose);
 
-  write_string_attribute(file, "phase", phase);
-  write_string_attribute(file, "kernel_label", label);
-  write_uint64_attribute(file, "kernel_id", kernel_id);
-  write_uint64_attribute(file, "kernel_invocation", kernel_invocation);
-  write_uint64_attribute(file, "active_allocations",
-                         snapshot.allocations.size());
-  write_uint64_attribute(file, "active_bytes", snapshot.active_bytes);
+    write_string_attribute(file.get(), "phase", phase);
+    write_string_attribute(file.get(), "kernel_label", label);
+    write_uint64_attribute(file.get(), "kernel_id", kernel_id);
+    write_uint64_attribute(file.get(), "kernel_invocation", kernel_invocation);
+    write_uint64_attribute(file.get(), "active_allocations",
+                           snapshot.allocations.size());
+    write_uint64_attribute(file.get(), "active_bytes", snapshot.active_bytes);
 
-  const hid_t views_group =
-      H5Gcreate2(file, "views", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  if (views_group >= 0) {
+    Hdf5Handle views_group(
+        CHECK_HDF5_ID(H5Gcreate2(file.get(), "views", H5P_DEFAULT, H5P_DEFAULT,
+                                 H5P_DEFAULT)),
+        H5Gclose);
     for (std::size_t i = 0; i < snapshot.allocations.size(); ++i) {
-      write_allocation_group(views_group, snapshot.allocations[i], i);
+      write_allocation_group(views_group.get(), snapshot.allocations[i], i);
     }
-    H5Gclose(views_group);
-  }
+    views_group.close_checked();
 
-  const hid_t metadata_group =
-      H5Gcreate2(file, "metadata", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  if (metadata_group >= 0) {
+    Hdf5Handle metadata_group(
+        CHECK_HDF5_ID(H5Gcreate2(file.get(), "metadata", H5P_DEFAULT,
+                                 H5P_DEFAULT, H5P_DEFAULT)),
+        H5Gclose);
     for (const auto& [key, value] : metadata) {
-      write_string_attribute(metadata_group, key.c_str(), value);
+      write_string_attribute(metadata_group.get(), key.c_str(), value);
     }
-    H5Gclose(metadata_group);
+    metadata_group.close_checked();
+
+    write_dataset(file.get(), "functor", functor_data);
+
+    file.close_checked();
+    result.ok = true;
+  } catch (...) {
+    result.ok = false;
   }
-
-  write_dataset(file, "functor", functor_data);
-
-  H5Fclose(file);
-  result.ok = true;
   return result;
 }
 
