@@ -183,24 +183,22 @@ using hdf5_iterate_fun_t = std::function<void(std::string, std::string_view,
 
 std::string get_hdf5_string_attribute(hid_t group, const char* name,
                                       const char* attr_name) {
-  hid_t attr_id =
-      H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT);
-  if (attr_id == H5I_INVALID_HID) {
-    throw std::runtime_error(
-        "Error when reading the dump file: group does not contain a " +
-        std::string(attr_name) + "attribute");
-  }
+  kkf::hdf5::ScopedHandle attr(
+      CHECK_HDF5_ID(
+          H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
 
   H5A_info_t attr_info;
-  CHECK_HDF5_CALL(H5Aget_info(attr_id, &attr_info));
-  hid_t type = CHECK_HDF5_ID(H5Aget_type(attr_id));
+  CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
+  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                               H5Tclose);
   std::string attribute(attr_info.data_size, '\0');
-  CHECK_HDF5_CALL(H5Aread(attr_id, type, attribute.data()));
+  CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), attribute.data()));
 
   // remove the null-terminator
   attribute.pop_back();
-  CHECK_HDF5_CALL(H5Tclose(type));
-  CHECK_HDF5_CALL(H5Aclose(attr_id));
+  type.close_checked();
+  attr.close_checked();
 
   return attribute;
 }
