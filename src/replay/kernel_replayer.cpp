@@ -1,5 +1,6 @@
 #include <Kokkos_Core.hpp>
 #include <cassert>
+#include <memory>
 #include <numeric>
 #include <set>
 #include <stdexcept>
@@ -279,14 +280,16 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
-  char* buffer = allocate_host_buffer(buffer_size, memory_space);
-  CHECK_HDF5_CALL(
-      H5LTread_dataset(group, dataset_name.c_str(), H5T_NATIVE_UCHAR, buffer));
+  auto free_buffer             = [memory_space](char* ptr) {
+    free_host_buffer(ptr, memory_space);
+  };
+  std::unique_ptr<char, decltype(free_buffer)> buffer(
+      allocate_host_buffer(buffer_size, memory_space), free_buffer);
+  CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
+                                   H5T_NATIVE_UCHAR, buffer.get()));
 
-  (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(label, space, address,
-                                                         buffer, buffer_size);
-
-  free_host_buffer(buffer, memory_space);
+  (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(
+      label, space, address, buffer.get(), buffer_size);
 
   return 0;
 }
