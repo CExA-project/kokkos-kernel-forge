@@ -47,8 +47,8 @@ class ScopedHandle {
       return;
     }
     const hid_t id = id_;
-    id_            = H5I_INVALID_HID;
     check_call(close_(id), "close_(id)", __FILE__, __LINE__);
+    id_ = H5I_INVALID_HID;
   }
 
  private:
