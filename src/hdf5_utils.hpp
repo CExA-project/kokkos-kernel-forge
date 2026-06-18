@@ -1,7 +1,7 @@
 #pragma once
 
 #include <hdf5.h>
-
+#include <source_location>
 #include <sstream>
 #include <stdexcept>
 
@@ -61,6 +61,8 @@ class ScopedHandle {
 }  // namespace kkf::hdf5
 
 #define CHECK_HDF5_CALL(expr) \
-  ::kkf::hdf5::check_call((expr), #expr, __FILE__, __LINE__)
+  ::kkf::hdf5::check_call((expr), #expr, std::source_location::current().file_name(),
+std::source_location::current().line())
 #define CHECK_HDF5_ID(expr) \
-  ::kkf::hdf5::check_id((expr), #expr, __FILE__, __LINE__)
+  ::kkf::hdf5::check_id((expr), #expr, std::source_location::current().file_name(),
+std::source_location::current().line())
