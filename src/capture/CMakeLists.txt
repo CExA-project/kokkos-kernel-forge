@@ -9,7 +9,7 @@ if(NOT KOKKOS_INCLUDE_DIRS)
     message(FATAL_ERROR "Failed to get the kokkos include directory")
   endif()
 endif()
-target_include_directories(kkf_kokkos_hooks PRIVATE ${KOKKOS_INCLUDE_DIRS})
+target_include_directories(kkf_kokkos_hooks PRIVATE "${PROJECT_SOURCE_DIR}/src" ${KOKKOS_INCLUDE_DIRS})
 target_link_libraries(kkf_kokkos_hooks PRIVATE hdf5::hdf5 hdf5::hdf5_hl)
 
 set(KKF_KOKKOS_ALLOCATION_HEADER_SIZE 128)

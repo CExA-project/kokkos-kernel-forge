@@ -145,7 +145,8 @@ void dump_views(const char* phase, const std::string& label,
              " active_bytes=", snapshot.active_bytes);
   } else {
     log_line("dump_failed phase=", phase, " path=\"", dump_path,
-             "\" kernel_id=", kernel_id, " invocation=", invocation);
+             "\" kernel_id=", kernel_id, " invocation=", invocation,
+             " error=\"", result.error, "\"");
   }
 }
 

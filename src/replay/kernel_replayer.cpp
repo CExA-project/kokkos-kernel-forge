@@ -1,8 +1,8 @@
 #include <Kokkos_Core.hpp>
 #include <cassert>
+#include <memory>
 #include <numeric>
 #include <set>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -13,6 +13,7 @@
 #include <hdf5_hl.h>
 
 #include "kernel_replayer.hpp"
+#include "hdf5_utils.hpp"
 #include "allocation.hpp"
 #include "memory_space_type.hpp"
 
@@ -178,43 +179,27 @@ void free_host_buffer(char* ptr, MemorySpaceType mem) {
   }
 }
 
-void check_hdf5_call(herr_t status, const char* expr, const char* file,
-                     int line) {
-  if (status >= 0) {
-    return;
-  }
-
-  std::stringstream os;
-  os << file << ":" << line << ": "
-     << "The call " << expr << " failed";
-  throw std::runtime_error(os.str());
-}
-
-#define CHECK_HDF5_CALL(expr) \
-  cexa::kernel_replayer::impl::check_hdf5_call(expr, #expr, __FILE__, __LINE__);
-
 using hdf5_iterate_fun_t = std::function<void(std::string, std::string_view,
                                               char*, char*, std::size_t)>;
 
 std::string get_hdf5_string_attribute(hid_t group, const char* name,
                                       const char* attr_name) {
-  hid_t attr_id =
-      H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT);
-  if (attr_id == H5I_INVALID_HID) {
-    throw std::runtime_error(
-        "Error when reading the dump file: group does not contain a " +
-        std::string(attr_name) + "attribute");
-  }
+  kkf::hdf5::ScopedHandle attr(
+      CHECK_HDF5_ID(
+          H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
 
   H5A_info_t attr_info;
-  CHECK_HDF5_CALL(H5Aget_info(attr_id, &attr_info));
-  hid_t type = H5Aget_type(attr_id);
+  CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
+  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                               H5Tclose);
   std::string attribute(attr_info.data_size, '\0');
-  CHECK_HDF5_CALL(H5Aread(attr_id, type, attribute.data()));
+  CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), attribute.data()));
 
   // remove the null-terminator
   attribute.pop_back();
-  CHECK_HDF5_CALL(H5Aclose(attr_id));
+  type.close_checked();
+  attr.close_checked();
 
   return attribute;
 }
@@ -295,14 +280,16 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
-  char* buffer = allocate_host_buffer(buffer_size, memory_space);
-  CHECK_HDF5_CALL(
-      H5LTread_dataset(group, dataset_name.c_str(), H5T_NATIVE_UCHAR, buffer));
+  auto free_buffer             = [memory_space](char* ptr) {
+    free_host_buffer(ptr, memory_space);
+  };
+  std::unique_ptr<char, decltype(free_buffer)> buffer(
+      allocate_host_buffer(buffer_size, memory_space), free_buffer);
+  CHECK_HDF5_CALL(H5LTread_dataset(group, dataset_name.c_str(),
+                                   H5T_NATIVE_UCHAR, buffer.get()));
 
-  (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(label, space, address,
-                                                         buffer, buffer_size);
-
-  free_host_buffer(buffer, memory_space);
+  (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(
+      label, space, address, buffer.get(), buffer_size);
 
   return 0;
 }
@@ -363,18 +350,15 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
         "The kernel replayer expects the flag --kernel-replayer-dump");
   }
 
-  hid_t file = H5Fopen(hdf5_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT);
-
-  if (file == H5I_INVALID_HID) {
-    throw std::runtime_error("Failed to open hdf5 file " +
-                             std::string(hdf5_filename));
-  }
+  kkf::hdf5::ScopedHandle file(
+      CHECK_HDF5_ID(H5Fopen(hdf5_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
+      H5Fclose);
   std::set<std::pair<char*, std::size_t>> allocation_sets[2];
 
   hsize_t idx = 0;
-  H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                     impl::get_hdf5_dataset_alloc_info, allocation_sets,
-                     H5P_DEFAULT);
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::get_hdf5_dataset_alloc_info, allocation_sets, H5P_DEFAULT));
 
   for (auto [address, size] : impl::compute_allocations(allocation_sets[0])) {
     allocate(impl::MemorySpaceType::HOST, address, size);
@@ -400,27 +384,26 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
       };
 
   idx = 0;
-  H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                     impl::allocate_hdf5_dataset, &copy_data_wrapper,
-                     H5P_DEFAULT);
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::allocate_hdf5_dataset, &copy_data_wrapper, H5P_DEFAULT));
 
   idx = 0;
-  H5Aiterate_by_name(file, "metadata", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                     impl::read_hdf5_metadata, nullptr, H5P_DEFAULT);
+  CHECK_HDF5_CALL(
+      H5Aiterate_by_name(file.get(), "metadata", H5_INDEX_NAME, H5_ITER_NATIVE,
+                         &idx, impl::read_hdf5_metadata, nullptr, H5P_DEFAULT));
 
-  impl::read_functor_from_hdf5(file);
+  impl::read_functor_from_hdf5(file.get());
 
-  H5Fclose(file);
+  file.close_checked();
 
   std::string_view hdf5_output_filename =
       find_flag_argument(argc, argv, "--kernel-replayer-out-dump");
   if (hdf5_output_filename.data() != nullptr) {
-    file = H5Fopen(hdf5_output_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT);
-
-    if (file == H5I_INVALID_HID) {
-      throw std::runtime_error("Failed to open hdf5 file " +
-                               std::string(hdf5_output_filename));
-    }
+    kkf::hdf5::ScopedHandle output_file(
+        CHECK_HDF5_ID(
+            H5Fopen(hdf5_output_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
+        H5Fclose);
 
     impl::hdf5_iterate_fun_t allocate_wrapper =
         [this](std::string label, std::string_view memory_space, char*,
@@ -429,11 +412,11 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
         };
 
     hsize_t idx = 0;
-    H5Literate_by_name(file, "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-                       impl::allocate_hdf5_dataset, &allocate_wrapper,
-                       H5P_DEFAULT);
+    CHECK_HDF5_CALL(H5Literate_by_name(
+        output_file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+        impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
 
-    H5Fclose(file);
+    output_file.close_checked();
   }
 
   impl::host_allocations        = &host_allocations;
