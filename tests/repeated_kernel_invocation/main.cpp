@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kernel_extractor.hpp>
+#include <kkf/extractor.hpp>
 
 struct MultiplyFunctor {
   int factor;

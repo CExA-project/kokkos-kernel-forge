@@ -13,7 +13,7 @@
 #include <hdf5_hl.h>
 
 #include "kernel_replayer.hpp"
-#include "hdf5_utils.hpp"
+#include "kkf/common/hdf5_utils.hpp"
 #include "allocation.hpp"
 #include "memory_space_type.hpp"
 

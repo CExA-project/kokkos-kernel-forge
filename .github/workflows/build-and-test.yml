@@ -37,6 +37,7 @@ jobs:
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
           ctest_args: ''
+          test_installation: true
         - name: clang Release build and tests
           compiler: clang
           cxx: clang++
@@ -44,6 +45,7 @@ jobs:
           kkf_enable_asan: OFF
           kkf_enable_ubsan: OFF
           ctest_args: ''
+          test_installation: true
         - name: clang ASan build and tests
           compiler: clang-asan
           cxx: clang++
@@ -63,6 +65,7 @@ jobs:
       CXX: ${{ matrix.cxx }}
       Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
       KOKKOS_VERSION: 5.1.1
+      kkf_ROOT: ${{ github.workspace }}/kkf_install
 
     steps:
     - name: Check out repository
@@ -132,3 +135,16 @@ jobs:
 
     - name: Run tests
       run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.ctest_args }}
+
+    - name: Install the project
+      if: ${{ matrix.test_installation }}
+      run: cmake --install build --prefix "$kkf_ROOT"
+
+    - name: Test the installation
+      if: ${{ matrix.test_installation }}
+      working-directory: ${{ github.workspace }}/tests/install_test
+      run: |
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        cmake --build build --parallel "$(nproc)"
+        KOKKOS_TOOLS_LIBS="$kkf_ROOT/lib/libkkf.so" KOKKOS_TOOLS_ARGS=--kkf-dump-kernel-label=test_kernel ./build/test
+        ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5

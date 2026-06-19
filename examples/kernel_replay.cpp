@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include <kernel_replayer.hpp>
+#include <kkf/replayer.hpp>
 
 int main(int argc, char* argv[]) {
   cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);

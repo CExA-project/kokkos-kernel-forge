@@ -8,6 +8,17 @@ Clone the repo, then configure and build with CMake
 git clone https://github.com/CExA-project/kokkos-kernel-forge.git
 ```
 
+The library can be included in a CMake project:
+```cmake
+find_package(kkf REQUIRED)
+target_link_libraries(my_program PRIVATE kkf::kernel_extractor)
+```
+The replayed program should link with `kkf::kernel_replayer`
+```cmake
+find_package(kkf REQUIRED)
+target_link_libraries(my_program PRIVATE kkf::kernel_replayer)
+```
+
 ## Extraction
 
 In order to extract a kernel from a program, you have to:
@@ -37,7 +48,7 @@ Will become
 ```cpp
 #include <Kokkos_Core.hpp>
 
-#include <kernel_extractor.hpp> // this provides replay_functor()
+#include <kkf/extractor.hpp> // this provides replay_functor()
 
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
@@ -80,7 +91,7 @@ The program above becomes
 ```cpp
 #include <Kokkos_Core.hpp>
 
-#include <kernel_replayer.hpp> // <kernel_extractor.hpp> -> <kernel_replayer.hpp>
+#include <kkf/replayer.hpp> // <kkf/extractor.hpp> -> <kkf/replayer.hpp>
 
 int main(int argc, char* argv[]) {
   // We initialize the replayer before Kokkos

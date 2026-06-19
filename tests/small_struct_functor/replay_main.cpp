@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kernel_replayer.hpp>
+#include <kkf/replayer.hpp>
 
 struct Functor {
  private:

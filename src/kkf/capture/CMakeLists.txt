@@ -1,4 +1,16 @@
-add_library(kkf_kokkos_hooks SHARED allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp)
+add_library(kkf_kokkos_hooks SHARED)
+target_sources(
+  kkf_kokkos_hooks
+  PRIVATE allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp
+  PRIVATE FILE_SET
+          common_headers
+          TYPE
+          HEADERS
+          BASE_DIRS
+          "${PROJECT_SOURCE_DIR}/src"
+          FILES
+          ../common/hdf5_utils.hpp
+)
 target_link_libraries(kkf_kokkos_hooks PRIVATE kkf_warnings kkf_sanitizers)
 target_compile_features(kkf_kokkos_hooks PRIVATE cxx_std_20)
 
@@ -9,7 +21,7 @@ if(NOT KOKKOS_INCLUDE_DIRS)
     message(FATAL_ERROR "Failed to get the kokkos include directory")
   endif()
 endif()
-target_include_directories(kkf_kokkos_hooks PRIVATE "${PROJECT_SOURCE_DIR}/src" ${KOKKOS_INCLUDE_DIRS})
+target_include_directories(kkf_kokkos_hooks PRIVATE ${KOKKOS_INCLUDE_DIRS})
 target_link_libraries(kkf_kokkos_hooks PRIVATE hdf5::hdf5 hdf5::hdf5_hl)
 
 set(KKF_KOKKOS_ALLOCATION_HEADER_SIZE 128)
@@ -35,3 +47,6 @@ if(Kokkos_ENABLE_HIP)
 endif()
 
 set_target_properties(kkf_kokkos_hooks PROPERTIES OUTPUT_NAME kkf LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+# We don't export the tool target since it's not supposed to be used through CMake
+install(TARGETS kkf_kokkos_hooks)

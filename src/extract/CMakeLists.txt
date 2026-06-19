@@ -1,8 +1,0 @@
-add_library(kernel_extractor kernel_extractor.cpp)
-target_link_libraries(kernel_extractor PRIVATE kkf_warnings kkf_sanitizers)
-target_include_directories(kernel_extractor PUBLIC "${CMAKE_CURRENT_LIST_DIR}")
-target_link_libraries(kernel_extractor PUBLIC Kokkos::kokkos)
-if(Kokkos_ENABLE_LIBDL)
-  target_compile_definitions(kernel_extractor PRIVATE _GNU_SOURCE)
-  target_link_libraries(kernel_extractor PRIVATE ${CMAKE_DL_LIBS})
-endif()

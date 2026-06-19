@@ -1,0 +1,10 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+find_dependency(Kokkos)
+find_dependency(HDF5 COMPONENTS C HL)
+
+include("${CMAKE_CURRENT_LIST_DIR}/kkfTargets.cmake")
+
+check_required_components(kkf)
