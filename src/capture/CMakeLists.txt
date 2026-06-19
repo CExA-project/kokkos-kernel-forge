@@ -1,4 +1,5 @@
-add_library(kkf_kokkos_hooks SHARED allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp)
+add_library(kkf_kokkos_hooks SHARED)
+target_sources(kkf_kokkos_hooks PRIVATE allocation_tracker.cpp memory_copy.cpp view_dump.cpp kokkos_hooks.cpp)
 target_link_libraries(kkf_kokkos_hooks PRIVATE kkf_warnings kkf_sanitizers)
 target_compile_features(kkf_kokkos_hooks PRIVATE cxx_std_20)
 
@@ -35,3 +36,6 @@ if(Kokkos_ENABLE_HIP)
 endif()
 
 set_target_properties(kkf_kokkos_hooks PROPERTIES OUTPUT_NAME kkf LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+# We don't export the tool target since it's not supposed to be used through CMake
+install(TARGETS kkf_kokkos_hooks)
