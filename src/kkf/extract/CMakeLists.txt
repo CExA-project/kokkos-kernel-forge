@@ -1,6 +1,16 @@
 add_library(kernel_extractor)
 target_sources(
-  kernel_extractor PRIVATE kernel_extractor.cpp PUBLIC FILE_SET HEADERS BASE_DIRS . FILES kernel_extractor.hpp
+  kernel_extractor
+  PRIVATE kernel_extractor.cpp
+  PUBLIC FILE_SET
+         extract_headers
+         TYPE
+         HEADERS
+         BASE_DIRS
+         "${PROJECT_SOURCE_DIR}/src"
+         FILES
+         ../extractor.hpp
+         kernel_extractor.hpp
 )
 target_link_libraries(
   kernel_extractor PRIVATE $<BUILD_LOCAL_INTERFACE:kkf_warnings> $<BUILD_LOCAL_INTERFACE:kkf_sanitizers>
@@ -11,4 +21,4 @@ if(Kokkos_ENABLE_LIBDL)
   target_link_libraries(kernel_extractor PRIVATE ${CMAKE_DL_LIBS})
 endif()
 
-install(TARGETS kernel_extractor EXPORT kkfTargets FILE_SET HEADERS)
+install(TARGETS kernel_extractor EXPORT kkfTargets FILE_SET extract_headers)

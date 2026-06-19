@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include <kernel_extractor.hpp>
+#include <kkf/extractor.hpp>
 
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos(argc, argv);

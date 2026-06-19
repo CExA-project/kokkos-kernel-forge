@@ -42,7 +42,7 @@ find_package(HDF5 REQUIRED COMPONENTS C HL)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-add_subdirectory(src)
+add_subdirectory(src/kkf)
 
 include(CTest)
 
