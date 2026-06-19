@@ -17,17 +17,18 @@ function(kkf_add_kernel_replayer TARGET_NAME)
            host_allocation.hpp
            kernel_replayer.hpp
            memory_space_type.hpp
-    PUBLIC FILE_SET
-           common_headers
-           TYPE
-           HEADERS
-           BASE_DIRS
-           "${PROJECT_SOURCE_DIR}/src"
-           FILES
-           ../common/hdf5_utils.hpp
+    PRIVATE FILE_SET
+            common_headers
+            TYPE
+            HEADERS
+            BASE_DIRS
+            "${PROJECT_SOURCE_DIR}/src"
+            FILES
+            ../common/hdf5_utils.hpp
   )
-  target_link_libraries("${TARGET_NAME}" PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl)
-  target_link_libraries("${TARGET_NAME}" PRIVATE $<BUILD_LOCAL_INTERFACE:kkf_warnings>)
+  target_link_libraries(
+    "${TARGET_NAME}" PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl $<BUILD_LOCAL_INTERFACE:kkf_warnings>
+  )
 endfunction()
 
 kkf_add_kernel_replayer(kernel_replayer)
@@ -39,4 +40,4 @@ else()
   add_library(kernel_replayer_sanitized ALIAS kernel_replayer)
 endif()
 
-install(TARGETS kernel_replayer EXPORT kkfTargets FILE_SET replay_headers FILE_SET common_headers)
+install(TARGETS kernel_replayer EXPORT kkfTargets FILE_SET replay_headers)
