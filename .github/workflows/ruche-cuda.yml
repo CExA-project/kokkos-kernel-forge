@@ -1,0 +1,135 @@
+# Portions of this workflow were adapted from Kokkos-FFT:
+# https://github.com/kokkos/kokkos-fft
+#
+# SPDX-FileCopyrightText: (C) The Kokkos-FFT development team, see Kokkos-FFT COPYRIGHT.md
+# SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
+
+name: Ruche CUDA build and test
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: "30 0 * * 1-5" # every weekday at midnight UTC
+  # Temporary PR validation trigger: remove before merging.
+  push:
+    branches:
+    - ci/ruche
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_test:
+    # only run on original repo
+    if: github.repository == 'CExA-project/kokkos-kernel-forge'
+    runs-on: [self-hosted, cuda]
+    timeout-minutes: 120
+
+    strategy:
+      # allow all matrix jobs to perform even if errors occur
+      fail-fast: false
+      matrix:
+        build_type:
+        - Release
+        cxx_standard:
+        - 20
+        backend:
+        - name: CUDA-A100-GCC/13.4.0-CUDA/12.8.1-Static-CUDA_CONSTEXPR-CUDA_RELOCATABLE_DEVICE_CODE
+          modules: >-
+            gcc/13.4.0/gcc-15.1.0
+            cuda/12.8.1/none-none
+            cmake/3.31.9/gcc-15.1.0
+            python/3.14.0/gcc-15.1.0
+          test: -e gpu -g a100
+          kokkos_configure: >-
+            -DKokkos_ENABLE_CUDA=ON
+            -DKokkos_ENABLE_SERIAL=ON
+            -DKokkos_ARCH_AMPERE80=ON
+            -DKokkos_ENABLE_CUDA_CONSTEXPR=ON
+            -DKokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE=ON
+          kkf_configure: >-
+            -DKKF_BUILD_EXAMPLES=ON
+            -DKKF_BUILD_TESTS=ON
+            -DKKF_ENABLE_WARNINGS=ON
+            -DKKF_ENABLE_ASAN=OFF
+            -DKKF_ENABLE_UBSAN=OFF
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v7
+
+    - name: Install Kokkos
+      run: |
+        git clone --depth 1 --branch 5.1.1 https://github.com/kokkos/kokkos.git
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake -S kokkos -B kokkos_build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
+            -DCMAKE_INSTALL_PREFIX=kokkos_install \
+            ${{ matrix.backend.kokkos_configure }}
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --build kokkos_build --parallel
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --install kokkos_build
+
+    - name: Install HDF5
+      run: |
+        git clone --depth 1 --branch hdf5-1.14.6 https://github.com/HDFGroup/hdf5.git
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake -S hdf5 -B hdf5_build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_INSTALL_PREFIX=hdf5_install \
+            -DHDF5_BUILD_HL_LIB=ON \
+            -DHDF5_BUILD_CPP_LIB=OFF \
+            -DHDF5_BUILD_FORTRAN=OFF \
+            -DHDF5_BUILD_TOOLS=OFF \
+            -DHDF5_BUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=OFF
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --build hdf5_build --parallel
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --install hdf5_build
+
+    - name: Initialize the build tree
+      run: |
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake \
+            -S . \
+            -B build \
+            -DBUILDNAME=${{ matrix.backend.name }}-C++${{ matrix.cxx_standard }}-${{ matrix.build_type }} \
+            -DSITE=cea-ruche \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
+            -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+            -DCMAKE_CXX_FLAGS="-Wall -Wextra" \
+            -DCMAKE_PREFIX_PATH="$PWD/hdf5_install" \
+            -DKokkos_DIR=kokkos_install/lib64/cmake/Kokkos/ \
+            ${{ matrix.backend.kkf_configure }}
+
+    - name: Build
+      run: |
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e cpu \
+          make -C build -j40
+
+    - name: Test
+      run: |
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          ${{ matrix.backend.test }} \
+          make -C build --keep-going -j1 kkf_run_replay_tests
