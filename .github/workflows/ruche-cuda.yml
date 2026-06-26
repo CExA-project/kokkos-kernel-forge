@@ -120,6 +120,8 @@ jobs:
 
     - name: Build
       run: |
+        # Use make directly because cmake --build can complete the child build
+        # and then hang under Ruche's srun.
         run \
           -m "${{ matrix.backend.modules }}" \
           -e cpu \
@@ -127,6 +129,8 @@ jobs:
 
     - name: Test
       run: |
+        # Use the Make replay target because ctest can complete launcher.sh
+        # and then hang under Ruche's srun.
         run \
           -m "${{ matrix.backend.modules }}" \
           ${{ matrix.backend.test }} \

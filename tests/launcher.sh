@@ -53,7 +53,7 @@ if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
 fi
 
-if [ "$COMPARE_OUTPUT" -eq 0 ]; then
+if (( COMPARE_OUTPUT == 0 )); then
   clean_exit 0
 fi
 
