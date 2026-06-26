@@ -8,6 +8,10 @@ name: Ruche CUDA build and test
 
 on:
   workflow_dispatch:
+  # Temporary PR validation trigger: remove before merging.
+  push:
+    branches:
+    - ci/ruche
   schedule:
   - cron: "30 0 * * 1-5" # every weekday at midnight UTC
 
@@ -57,7 +61,29 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v7
 
-    - name: Install Kokkos
+    - name: Compute Kokkos cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "KOKKOS_VERSION=$KOKKOS_VERSION"
+          echo "matrix.build_type=${{ matrix.build_type }}"
+          echo "matrix.cxx_standard=${{ matrix.cxx_standard }}"
+          echo "matrix.backend.name=${{ matrix.backend.name }}"
+          echo "matrix.backend.modules=${{ matrix.backend.modules }}"
+          echo "matrix.backend.kokkos_configure=${{ matrix.backend.kokkos_configure }}"
+        } > .kokkos-cache-fingerprint
+        cat .kokkos-cache-fingerprint
+
+    - name: Cache Kokkos install
+      id: cache-kokkos
+      uses: actions/cache@v5
+      with:
+        path: kokkos_install
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+
+    - name: Build and install Kokkos
+      if: steps.cache-kokkos.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git
         run \
@@ -77,7 +103,31 @@ jobs:
           -e local \
           cmake --install kokkos_build
 
-    - name: Install HDF5
+    - name: Compute HDF5 cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "HDF5_VERSION=$HDF5_VERSION"
+          echo "matrix.build_type=${{ matrix.build_type }}"
+          echo "matrix.backend.name=${{ matrix.backend.name }}"
+          echo "matrix.backend.modules=${{ matrix.backend.modules }}"
+          echo "HDF5_BUILD_HL_LIB=ON"
+          echo "HDF5_BUILD_TOOLS=OFF"
+          echo "HDF5_BUILD_EXAMPLES=OFF"
+          echo "BUILD_TESTING=OFF"
+        } > .hdf5-cache-fingerprint
+        cat .hdf5-cache-fingerprint
+
+    - name: Cache HDF5 install
+      id: cache-hdf5
+      uses: actions/cache@v5
+      with:
+        path: hdf5_install
+        key: hdf5-${{ runner.os }}-${{ runner.arch }}-${{ env.HDF5_VERSION }}-${{ hashFiles('.hdf5-cache-fingerprint') }}
+
+    - name: Build and install HDF5
+      if: steps.cache-hdf5.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 --branch "$HDF5_VERSION" https://github.com/HDFGroup/hdf5.git
         run \
