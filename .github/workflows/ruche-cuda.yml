@@ -1,0 +1,183 @@
+# Portions of this workflow were adapted from Kokkos-FFT:
+# https://github.com/kokkos/kokkos-fft
+#
+# SPDX-FileCopyrightText: (C) The Kokkos-FFT development team, see Kokkos-FFT COPYRIGHT.md
+# SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
+
+name: Ruche CUDA build and test
+
+on:
+  workflow_dispatch:
+  schedule:
+  - cron: "30 0 * * 1-5" # every weekday at midnight UTC
+
+permissions:
+  contents: read
+
+jobs:
+  build_and_test:
+    # only run on original repo
+    if: github.repository == 'CExA-project/kokkos-kernel-forge'
+    runs-on: [self-hosted, cuda]
+    timeout-minutes: 120
+    env:
+      KOKKOS_VERSION: 5.1.1
+      HDF5_VERSION: hdf5-1.14.6
+
+    strategy:
+      # allow all matrix jobs to perform even if errors occur
+      fail-fast: false
+      matrix:
+        build_type:
+        - Release
+        cxx_standard:
+        - 20
+        backend:
+        - name: CUDA-A100-GCC/13.4.0-CUDA/12.8.1-Static-CUDA_CONSTEXPR-CUDA_RELOCATABLE_DEVICE_CODE
+          modules: >-
+            gcc/13.4.0/gcc-15.1.0
+            cuda/12.8.1/none-none
+            cmake/3.31.9/gcc-15.1.0
+            python/3.14.0/gcc-15.1.0
+          test: -e gpu -g a100
+          kokkos_configure: >-
+            -DKokkos_ENABLE_CUDA=ON
+            -DKokkos_ENABLE_SERIAL=ON
+            -DKokkos_ARCH_AMPERE80=ON
+            -DKokkos_ENABLE_CUDA_CONSTEXPR=ON
+            -DKokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE=ON
+          kkf_configure: >-
+            -DKKF_BUILD_EXAMPLES=ON
+            -DKKF_BUILD_TESTS=ON
+            -DKKF_ENABLE_WARNINGS=ON
+            -DKKF_ENABLE_ASAN=OFF
+            -DKKF_ENABLE_UBSAN=OFF
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v7
+
+    - name: Compute Kokkos cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "KOKKOS_VERSION=$KOKKOS_VERSION"
+          echo "matrix.build_type=${{ matrix.build_type }}"
+          echo "matrix.cxx_standard=${{ matrix.cxx_standard }}"
+          echo "matrix.backend.name=${{ matrix.backend.name }}"
+          echo "matrix.backend.modules=${{ matrix.backend.modules }}"
+          echo "matrix.backend.kokkos_configure=${{ matrix.backend.kokkos_configure }}"
+        } > .kokkos-cache-fingerprint
+        cat .kokkos-cache-fingerprint
+
+    - name: Cache Kokkos install
+      id: cache-kokkos
+      uses: actions/cache@v5
+      with:
+        path: kokkos_install
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+
+    - name: Build and install Kokkos
+      if: steps.cache-kokkos.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake -S kokkos -B kokkos_build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
+            -DCMAKE_INSTALL_PREFIX=kokkos_install \
+            ${{ matrix.backend.kokkos_configure }}
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --build kokkos_build --parallel
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --install kokkos_build
+
+    - name: Compute HDF5 cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "HDF5_VERSION=$HDF5_VERSION"
+          echo "matrix.build_type=${{ matrix.build_type }}"
+          echo "matrix.backend.name=${{ matrix.backend.name }}"
+          echo "matrix.backend.modules=${{ matrix.backend.modules }}"
+          echo "HDF5_BUILD_HL_LIB=ON"
+          echo "HDF5_BUILD_TOOLS=OFF"
+          echo "HDF5_BUILD_EXAMPLES=OFF"
+          echo "BUILD_TESTING=OFF"
+        } > .hdf5-cache-fingerprint
+        cat .hdf5-cache-fingerprint
+
+    - name: Cache HDF5 install
+      id: cache-hdf5
+      uses: actions/cache@v5
+      with:
+        path: hdf5_install
+        key: hdf5-${{ runner.os }}-${{ runner.arch }}-${{ env.HDF5_VERSION }}-${{ hashFiles('.hdf5-cache-fingerprint') }}
+
+    - name: Build and install HDF5
+      if: steps.cache-hdf5.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch "$HDF5_VERSION" https://github.com/HDFGroup/hdf5.git
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake -S hdf5 -B hdf5_build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_INSTALL_PREFIX=hdf5_install \
+            -DHDF5_BUILD_HL_LIB=ON \
+            -DHDF5_BUILD_TOOLS=OFF \
+            -DHDF5_BUILD_EXAMPLES=OFF \
+            -DBUILD_TESTING=OFF
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --build hdf5_build --parallel
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake --install hdf5_build
+
+    - name: Initialize the build tree
+      run: |
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e local \
+          cmake \
+            -G "Unix Makefiles" \
+            -S . \
+            -B build \
+            -DBUILDNAME=${{ matrix.backend.name }}-C++${{ matrix.cxx_standard }}-${{ matrix.build_type }} \
+            -DSITE=cea-ruche \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \
+            -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+            -DCMAKE_CXX_FLAGS="-Wall -Wextra" \
+            -DCMAKE_PREFIX_PATH="$PWD/hdf5_install" \
+            -DKokkos_DIR=kokkos_install/lib64/cmake/Kokkos/ \
+            ${{ matrix.backend.kkf_configure }}
+
+    - name: Build
+      run: |
+        # Use make directly because cmake --build can complete the child build
+        # and then hang under Ruche's srun.
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          -e cpu \
+          make -C build -j40
+
+    - name: Test
+      run: |
+        # Use the Make replay target because ctest can complete launcher.sh
+        # and then hang under Ruche's srun.
+        run \
+          -m "${{ matrix.backend.modules }}" \
+          ${{ matrix.backend.test }} \
+          make -C build -j1 kkf_run_replay_tests

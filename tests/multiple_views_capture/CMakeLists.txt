@@ -4,4 +4,4 @@ target_link_libraries(multiple_views_capture PRIVATE kkf_warnings kkf_sanitizers
 add_executable(multiple_views_capture_replay replay_main.cpp)
 target_link_libraries(multiple_views_capture_replay PRIVATE kkf_warnings Kokkos::kokkos kernel_replayer)
 
-add_replay_test(multiple_views_capture "")
+add_replay_test(multiple_views_capture FALSE)

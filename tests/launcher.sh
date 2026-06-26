@@ -34,9 +34,9 @@ clean_exit() {
 # TODO: Make output comparison less dependent on Kokkos/runtime log formatting.
 # Prefer comparing only stable test result lines instead of filtering known log noise.
 clean_output() {
-  grep -vF "[kkf-capture]" "$1" \
-    | grep -vF "KokkosP:" \
-    | grep -vF "-----------------------------------------------------------"
+  grep -vF -- "[kkf-capture]" "$1" \
+    | grep -vF -- "KokkosP:" \
+    | grep -vF -- "-----------------------------------------------------------"
 }
 
 rm -f *.h5
@@ -53,7 +53,7 @@ if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
 fi
 
-if [ $COMPARE_OUTPUT -eq 0 ]; then
+if (( COMPARE_OUTPUT == 0 )); then
   clean_exit 0
 fi
 
