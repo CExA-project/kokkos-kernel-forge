@@ -73,7 +73,7 @@ jobs:
 
     - name: Cache Kokkos install
       id: cache-kokkos
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: kokkos_install
         key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
@@ -117,7 +117,7 @@ jobs:
 
     - name: Cache HDF5 install
       id: cache-hdf5
-      uses: actions/cache@v5
+      uses: actions/cache@v6
       with:
         path: hdf5_install
         key: hdf5-${{ runner.os }}-${{ runner.arch }}-${{ env.HDF5_VERSION }}-${{ hashFiles('.hdf5-cache-fingerprint') }}
