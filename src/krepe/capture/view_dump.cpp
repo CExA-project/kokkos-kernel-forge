@@ -204,6 +204,8 @@ void write_allocation_group(hid_t views_group,
   write_string_attribute(group.get(), "p_data",
                          pointer_to_string(allocation.record.p_data));
   write_uint64_attribute(group.get(), "size", allocation.record.size);
+  write_uint64_attribute(group.get(), "reported_size",
+                         allocation.record.reported_size);
 
   std::vector<unsigned char> bytes;
   const std::string skip_reason = copy_allocation_bytes(allocation, bytes);

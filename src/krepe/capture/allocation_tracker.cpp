@@ -6,12 +6,15 @@ namespace krepe {
 
 void AllocationTracker::record_allocation(std::string label, std::string space,
                                           const void* ptr, const void* p_data,
-                                          const std::uint64_t size) {
+                                          const std::uint64_t size,
+                                          const std::uint64_t reported_size,
+                                          const bool data_size_known) {
   if (ptr == nullptr) {
     return;
   }
 
-  AllocationRecord record{std::move(label), space, p_data, size};
+  AllocationRecord record{std::move(label), space,          p_data, size,
+                          reported_size,    data_size_known};
   std::lock_guard<std::mutex> lock(mutex_);
   active_allocations_[space].insert_or_assign(ptr, std::move(record));
 }

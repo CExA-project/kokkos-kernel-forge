@@ -752,15 +752,15 @@ void ScopeGuard::allocate_output(std::string label,
                                  std::size_t size) {
   if (impl::memory_space_type_from_string(memory_space) ==
       impl::MemorySpaceType::HOST) {
-    host_output_allocations.insert(
-        {label, impl::regular_host_allocate(size, data)});
+    host_output_allocations.insert_or_assign(
+        label, impl::regular_host_allocate(size, data));
   } else {
 #if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
     throw std::runtime_error(
         "Trying to access device allocations but no device space is enabled");
 #else
-    device_output_allocations.insert(
-        {label, impl::regular_device_allocate(size, data)});
+    device_output_allocations.insert_or_assign(
+        label, impl::regular_device_allocate(size, data));
 #endif
   }
 }

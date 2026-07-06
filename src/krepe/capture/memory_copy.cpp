@@ -52,6 +52,9 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
   if (!host_accessible && !cuda_device && !hip_device) {
     return "memory space is not supported for raw byte dumps";
   }
+  if (!allocation.record.data_size_known) {
+    return "allocation data size could not be bounded safely";
+  }
 #if !defined(KREPE_ENABLE_CUDA_DUMP)
   if (cuda_device) {
     return "CUDA dump support was not enabled at build time";
