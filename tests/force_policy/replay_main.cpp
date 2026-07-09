@@ -12,7 +12,11 @@ int main(int argc, char* argv[]) {
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", 0, KOKKOS_LAMBDA(int i) { values(i) *= 2; });
+      "test_kernel", cexa::kernel_replayer::force_policy(512),
+      KOKKOS_LAMBDA(int i) {
+        values(i) *= 2;
+        values(i + 512) = 0;
+      });
   Kokkos::fence();
 
   // auto h_values =
@@ -27,10 +31,18 @@ int main(int argc, char* argv[]) {
         auto h_ref_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), ref_values);
 
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < 512; i++) {
           if (h_replay_values(i) != h_ref_values(i)) {
             Kokkos::printf("At index %d, expected %d but got %d\n", i,
                            h_ref_values(i), h_replay_values(i));
+            std::exit(1);
+          }
+        }
+
+        for (int i = 512; i < N; i++) {
+          if (h_replay_values(i) != 0) {
+            Kokkos::printf("At index %d, expected %d but got %d\n", i, 0,
+                           h_replay_values(i));
             std::exit(1);
           }
         }

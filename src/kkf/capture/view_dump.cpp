@@ -9,6 +9,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace kkf {
@@ -98,22 +99,71 @@ void write_int_attribute(hid_t object, const char* name, int value) {
   space.close_checked();
 }
 
-void write_dataset(hid_t group, const char* name,
-                   const std::vector<unsigned char>& bytes) {
-  const hsize_t dims[1] = {static_cast<hsize_t>(bytes.size())};
+template <class T>
+auto Hdf5Datatype() {
+  if constexpr (std::is_same_v<T, unsigned char>) {
+    return H5T_NATIVE_UCHAR;
+  } else if constexpr (std::is_same_v<T, std::uint64_t>) {
+    return H5T_NATIVE_UINT64;
+  } else {
+    static_assert(false, "unsupported datatype");
+  }
+}
+
+template <class T>
+void write_dataset(hid_t group, const char* name, const std::vector<T>& data) {
+  auto datatype         = Hdf5Datatype<T>();
+  const hsize_t dims[1] = {static_cast<hsize_t>(data.size())};
   Hdf5Handle space(CHECK_HDF5_ID(H5Screate_simple(1, dims, nullptr)), H5Sclose);
   Hdf5Handle dataset(
-      CHECK_HDF5_ID(H5Dcreate2(group, name, H5T_NATIVE_UCHAR, space.get(),
-                               H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT)),
+      CHECK_HDF5_ID(H5Dcreate2(group, name, datatype, space.get(), H5P_DEFAULT,
+                               H5P_DEFAULT, H5P_DEFAULT)),
       H5Dclose);
 
-  if (!bytes.empty()) {
-    CHECK_HDF5_CALL(H5Dwrite(dataset.get(), H5T_NATIVE_UCHAR, H5S_ALL, H5S_ALL,
-                             H5P_DEFAULT, bytes.data()));
+  if (!data.empty()) {
+    CHECK_HDF5_CALL(H5Dwrite(dataset.get(), datatype, H5S_ALL, H5S_ALL,
+                             H5P_DEFAULT, data.data()));
   }
 
   dataset.close_checked();
   space.close_checked();
+}
+
+void write_policy(hid_t policy_group, const NoPolicyDesc&) {
+  write_string_attribute(policy_group, "type", "none");
+}
+
+void write_policy(hid_t policy_group, const ScalarPolicyDesc& policy) {
+  write_string_attribute(policy_group, "type", "scalar");
+  write_int_attribute(policy_group, "index_type_size",
+                      policy.index_type_desc.size);
+  write_int_attribute(policy_group, "index_type_signed",
+                      policy.index_type_desc.is_signed);
+  write_uint64_attribute(policy_group, "end", policy.end);
+}
+
+void write_policy(hid_t policy_group, const RangePolicyDesc& policy) {
+  write_string_attribute(policy_group, "type", "range");
+  write_int_attribute(policy_group, "index_type_size",
+                      policy.index_type_desc.size);
+  write_int_attribute(policy_group, "index_type_signed",
+                      policy.index_type_desc.is_signed);
+  write_string_attribute(policy_group, "space", policy.space);
+  write_uint64_attribute(policy_group, "begin", policy.begin);
+  write_uint64_attribute(policy_group, "end", policy.end);
+}
+
+void write_policy(hid_t policy_group, const MDRangePolicyDesc& policy) {
+  write_string_attribute(policy_group, "type", "mdrange");
+  write_int_attribute(policy_group, "index_type_size",
+                      policy.index_type_desc.size);
+  write_int_attribute(policy_group, "index_type_signed",
+                      policy.index_type_desc.is_signed);
+  write_string_attribute(policy_group, "space", policy.space);
+  write_int_attribute(policy_group, "rank", policy.rank);
+  write_dataset(policy_group, "begin", policy.begin);
+  write_dataset(policy_group, "end", policy.end);
+  write_dataset(policy_group, "tile", policy.tile);
 }
 
 void write_allocation_group(hid_t views_group,
@@ -153,6 +203,8 @@ ViewDumpResult dump_view_snapshot(
     const AllocationSnapshot& snapshot,
     const std::vector<unsigned char>& functor_data,
     const std::unordered_map<std::string, std::string>& metadata,
+    const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
+                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc>& policy,
     std::string_view phase, std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation) {
   ViewDumpResult result;
@@ -190,6 +242,13 @@ ViewDumpResult dump_view_snapshot(
       write_string_attribute(metadata_group.get(), key.c_str(), value);
     }
     metadata_group.close_checked();
+
+    Hdf5Handle policy_group(
+        CHECK_HDF5_ID(H5Gcreate2(file.get(), "policy", H5P_DEFAULT, H5P_DEFAULT,
+                                 H5P_DEFAULT)),
+        H5Gclose);
+    std::visit([&](auto&& arg) { write_policy(policy_group.get(), arg); },
+               policy);
 
     write_dataset(file.get(), "functor", functor_data);
 

@@ -28,6 +28,7 @@
 #include <string_view>
 #include <system_error>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #define KOKKOS_HOOKS_EXPORT __attribute__((visibility("default")))
@@ -61,6 +62,9 @@ Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 kkf::AllocationTracker allocation_tracker;
 std::vector<unsigned char> functor_data;
 std::unordered_map<std::string, std::string> metadata;
+std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc, kkf::RangePolicyDesc,
+             kkf::MDRangePolicyDesc>
+    policy = kkf::NoPolicyDesc{};
 
 std::string dump_kernel_label;
 std::optional<std::uint64_t> dump_kernel_invocation = 1;
@@ -135,8 +139,9 @@ std::string obtain_dump_path(const std::string& filename) {
 void dump_views(const char* phase, const std::string& label,
                 const std::uint64_t kernel_id, const std::uint64_t invocation) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-  const kkf::ViewDumpResult result       = kkf::dump_view_snapshot(
-      snapshot, functor_data, metadata, phase, label, kernel_id, invocation);
+  const kkf::ViewDumpResult result =
+      kkf::dump_view_snapshot(snapshot, functor_data, metadata, policy, phase,
+                              label, kernel_id, invocation);
   const std::string dump_path = obtain_dump_path(result.filename);
   if (result.ok) {
     log_line("dump_written phase=", phase, " path=\"", dump_path,
@@ -235,6 +240,35 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_functor(
     const unsigned char* data, std::size_t size) {
   functor_data.resize(size);
   std::memcpy(functor_data.data(), data, size);
+}
+
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_scalar_policy(
+    std::size_t index_type_size, bool index_type_signed, std::uint64_t N) {
+  policy = kkf::ScalarPolicyDesc({index_type_size, index_type_signed}, N);
+}
+
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
+    const char* space, std::size_t index_type_size, bool index_type_signed,
+    std::uint64_t begin, std::uint64_t end) {
+  policy = kkf::RangePolicyDesc({index_type_size, index_type_signed}, space,
+                                begin, end);
+}
+
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
+    const char* space, std::size_t rank, std::size_t index_type_size,
+    bool index_type_signed, std::uint64_t* begin, std::uint64_t* end,
+    std::uint64_t* tile) {
+  policy = kkf::MDRangePolicyDesc({index_type_size, index_type_signed}, space,
+                                  rank, std::vector(begin, begin + rank),
+                                  std::vector(end, end + rank),
+                                  std::vector(tile, tile + rank));
+}
+
+KOKKOS_HOOKS_EXPORT bool cexa_kernel_dump_next_invocation_will_dump(
+    const char* kernel_name) {
+  std::lock_guard<std::mutex> lock(state_mutex);
+  return should_dump_views_for_invocation(kernel_name,
+                                          kernel_invocations[kernel_name] + 1);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(

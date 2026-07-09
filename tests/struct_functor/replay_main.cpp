@@ -24,9 +24,8 @@ int main(int argc, char* argv[]) {
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   int factor = 0;
-  Kokkos::parallel_for(
-      "test_kernel", N,
-      cexa::kernel_replayer::replay_functor(Functor(factor, values)));
+  cexa::kernel_replayer::parallel_for("test_kernel", N,
+                                      Functor(factor, values));
   Kokkos::fence();
 
   // auto h_values =

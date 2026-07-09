@@ -17,19 +17,16 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  Kokkos::parallel_for(
-      "test_kernel", N,
-      cexa::kernel_replayer::replay_functor(MultiplyFunctor{2, values}));
+  cexa::kernel_replayer::parallel_for("test_kernel", N,
+                                      MultiplyFunctor{2, values});
   Kokkos::fence();
 
-  Kokkos::parallel_for(
-      "test_kernel", N,
-      cexa::kernel_replayer::replay_functor(MultiplyFunctor{3, values}));
+  cexa::kernel_replayer::parallel_for("test_kernel", N,
+                                      MultiplyFunctor{3, values});
   Kokkos::fence();
 
-  Kokkos::parallel_for(
-      "test_kernel", N,
-      cexa::kernel_replayer::replay_functor(MultiplyFunctor{4, values}));
+  cexa::kernel_replayer::parallel_for("test_kernel", N,
+                                      MultiplyFunctor{4, values});
   Kokkos::fence();
 
   auto h_values =

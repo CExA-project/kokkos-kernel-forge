@@ -1,10 +1,13 @@
 #pragma once
 
+#include <cassert>
+#include <concepts>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
+#include <variant>
 #include <Kokkos_Core.hpp>
 #include "allocation.hpp"
 
@@ -22,6 +25,150 @@ struct add_unmanaged_trait;
 template <unsigned int N>
 struct add_unmanaged_trait<Kokkos::MemoryTraits<N>> {
   using type = Kokkos::MemoryTraits<N | Kokkos::Unmanaged>;
+};
+
+template <class Policy>
+struct ForcePolicy {
+  Policy policy;
+};
+
+template <class Policy>
+constexpr bool is_force_policy_v = false;
+
+template <class Policy>
+constexpr bool is_force_policy_v<ForcePolicy<Policy>> = true;
+
+// Variant which is visited at runtime to handle the compile time index type of
+// execution policies
+using index_type_var_t =
+    std::variant<std::vector<std::int8_t>, std::vector<std::uint8_t>,
+                 std::vector<std::int16_t>, std::vector<std::uint16_t>,
+                 std::vector<std::int32_t>, std::vector<std::uint32_t>,
+                 std::vector<std::int64_t>, std::vector<std::uint64_t>>;
+
+// Variant which is visited at runtime to handle the compile time rank of
+// MDRangePolicy
+using mdrange_rank_var_t = std::variant<
+#if KOKKOS_VERSION_GREATER_EQUAL(5, 2, 0)
+    std::integral_constant<int, 1>,
+#endif
+    std::integral_constant<int, 2>, std::integral_constant<int, 3>,
+    std::integral_constant<int, 4>, std::integral_constant<int, 5>,
+    std::integral_constant<int, 6>>;
+
+enum class PolicyType { none, scalar, range, mdrange };
+
+inline PolicyType policy_type;
+
+inline index_type_var_t policy_start;
+inline index_type_var_t policy_end;
+inline index_type_var_t policy_tile;
+inline mdrange_rank_var_t mdrange_policy_rank;
+
+template <class IndexType>
+auto get_scalar_policy(const std::vector<IndexType>& end) {
+  return end[0];
+}
+
+// NOTE: in practice, IndexType1 and IndexType2 will always be the
+// same type. But since we visit a variant holding every possible index type,
+// the compiler will instantiate every combination of index types, thus the need
+// to use multiple template parameters and std::common_type.
+template <class IndexType1, class IndexType2>
+auto get_range_policy(const std::vector<IndexType1>& start,
+                      const std::vector<IndexType2>& end) {
+  using IndexType = std::common_type_t<IndexType1, IndexType2>;
+  return Kokkos::RangePolicy(static_cast<IndexType>(start[0]),
+                             static_cast<IndexType>(end[0]));
+}
+
+template <int rank, class IndexType>
+auto get_mdrange_policy(const std::vector<IndexType>& start,
+                        const std::vector<IndexType>& end,
+                        const std::vector<IndexType>& tile) {
+  Kokkos::Array<IndexType, rank> start_arr;
+  Kokkos::Array<IndexType, rank> end_arr;
+  Kokkos::Array<IndexType, rank> tile_arr;
+  for (int i = 0; i < rank; i++) {
+    start_arr[i] = static_cast<IndexType>(start[i]);
+    end_arr[i]   = static_cast<IndexType>(end[i]);
+    tile_arr[i]  = static_cast<IndexType>(tile[i]);
+  }
+  return Kokkos::MDRangePolicy(start_arr, end_arr, tile_arr);
+}
+
+// NOTE: Since we resolve the rank using a variant, when calling visit, the
+// compiler will instantiate the parallel_for call with every possible rank,
+// which is why we wrap the functor with a functor able to take 1 to 6
+// arguments.
+template <class Functor>
+struct MDFunctorWrapper {
+  Functor f;
+
+  MDFunctorWrapper(Functor f) : f(f) {}
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0) const {
+    if constexpr (requires(Functor f) { f(0); }) {
+      f(i0);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0,
+                                              IndexType i1) const {
+    if constexpr (requires(Functor f) { f(0, 0); }) {
+      f(i0, i1);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0); }) {
+      f(i0, i1, i2);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2,
+                                              IndexType i3) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0, 0); }) {
+      f(i0, i1, i2, i3);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2, IndexType i3,
+                                              IndexType i4) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0, 0, 0); }) {
+      f(i0, i1, i2, i3, i4);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2, IndexType i3,
+                                              IndexType i4,
+                                              IndexType i5) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0, 0, 0, 0); }) {
+      f(i0, i1, i2, i3, i4, i5);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
 };
 }  // namespace impl
 
@@ -150,5 +297,72 @@ Functor replay_functor(const Functor& functor) {
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
 
   return f;
+}
+
+/**
+ * @brief Wraps an execution policy and allows to override the saved one in a
+ * parallel_for.
+ */
+template <class Policy>
+impl::ForcePolicy<Policy> force_policy(Policy&& policy) {
+  return impl::ForcePolicy{policy};
+}
+
+/**
+ * @brief Replays a parallel_for using the execution policy and functors stored
+ * in a replay dump.
+ *
+ * @param label A label forwarded to the underlying Kokkos::parallel_for
+ * @param p The policy to use, if it is `force_policy(other_policy)` then
+ * `other_policy` will be used, otherwise this parameter will be ignored and the
+ * policy stored in the replay dump will be used
+ * @param functor A functor with the same signature and the same captures as the
+ * functor to replay, its operator() will be used but its data will be replaced
+ * by the one stored in the replay dump
+ */
+template <class Policy, class Functor>
+void parallel_for(const std::string& label, [[maybe_unused]] const Policy& p,
+                  Functor&& functor) {
+  if constexpr (impl::is_force_policy_v<Policy>) {
+    Kokkos::parallel_for(label, p.policy, replay_functor(functor));
+  } else {
+    if (impl::policy_type == impl::PolicyType::none) {
+      throw std::runtime_error(
+          "Trying to use a replay parallel_for but the replay dump does not "
+          "contain an execution policy");
+    }
+
+    // We need to use the wrapper even with RangePolicy, as when replaying
+    // an MDRangePolicy the compiler will try to compile the scalar and
+    // RangePolicy branches with a functor taking multiple arguments
+    auto f = impl::MDFunctorWrapper{replay_functor(functor)};
+
+    if (impl::policy_type == impl::PolicyType::scalar) {
+      std::visit(
+          [&](auto&& end) {
+            Kokkos::parallel_for(label, impl::get_scalar_policy(end), f);
+          },
+          impl::policy_end);
+    } else if (impl::policy_type == impl::PolicyType::range) {
+      std::visit(
+          [&](auto&& start, auto&& end) {
+            Kokkos::parallel_for(label, impl::get_range_policy(start, end), f);
+          },
+          impl::policy_start, impl::policy_end);
+    } else {
+      std::visit(
+          [&]<int i>(std::integral_constant<int, i>) {
+            // MDRangePolicy's point_type and tile_type are always std::int64_t
+            auto& start =
+                std::get<std::vector<std::int64_t>>(impl::policy_start);
+            auto& end  = std::get<std::vector<std::int64_t>>(impl::policy_end);
+            auto& tile = std::get<std::vector<std::int64_t>>(impl::policy_tile);
+
+            auto policy = impl::get_mdrange_policy<i>(start, end, tile);
+            Kokkos::parallel_for(label, policy, f);
+          },
+          impl::mdrange_policy_rank);
+    }
+  }
 }
 }  // namespace cexa::kernel_replayer

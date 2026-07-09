@@ -145,7 +145,7 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
 void init_functor(char* buffer, std::size_t size) {
   if (functor_data.size() < size) {
     throw std::runtime_error(
-        "The stored functor is smaller then the requested functor, expected at "
+        "The stored functor is smaller than the requested functor, expected at "
         "most " +
         std::to_string(functor_data.size()) + "B, got " + std::to_string(size) +
         "B");
@@ -198,6 +198,48 @@ std::string get_hdf5_string_attribute(hid_t group, const char* name,
 
   // remove the null-terminator
   attribute.pop_back();
+  type.close_checked();
+  attr.close_checked();
+
+  return attribute;
+}
+
+int get_hdf5_int_attribute(hid_t group, const char* name,
+                           const char* attr_name) {
+  kkf::hdf5::ScopedHandle attr(
+      CHECK_HDF5_ID(
+          H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
+
+  H5A_info_t attr_info;
+  CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
+  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                               H5Tclose);
+  assert(attr_info.data_size == sizeof(int));
+  int attribute;
+  CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), &attribute));
+
+  type.close_checked();
+  attr.close_checked();
+
+  return attribute;
+}
+
+std::uint64_t get_hdf5_uint64_attribute(hid_t group, const char* name,
+                                        const char* attr_name) {
+  kkf::hdf5::ScopedHandle attr(
+      CHECK_HDF5_ID(
+          H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
+
+  H5A_info_t attr_info;
+  CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
+  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                               H5Tclose);
+  assert(attr_info.data_size == sizeof(std::uint64_t));
+  std::uint64_t attribute;
+  CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), &attribute));
+
   type.close_checked();
   attr.close_checked();
 
@@ -313,6 +355,127 @@ void read_functor_from_hdf5(hid_t file) {
       H5LTread_dataset(file, "functor", H5T_NATIVE_UCHAR, functor_data.data()));
 }
 
+std::vector<std::uint64_t> read_hdf5_uint64_dataset(hid_t root,
+                                                    const char* name) {
+  int dataset_rank = 0;
+  CHECK_HDF5_CALL(H5LTget_dataset_ndims(root, name, &dataset_rank));
+  assert(dataset_rank == 1);
+  hsize_t dim = 0;
+  H5T_class_t datatype;
+  std::size_t datatype_size;
+  CHECK_HDF5_CALL(
+      H5LTget_dataset_info(root, name, &dim, &datatype, &datatype_size));
+  assert(datatype == H5T_INTEGER);
+  assert(datatype_size == sizeof(std::uint64_t));
+
+  std::vector<std::uint64_t> res(dim);
+  CHECK_HDF5_CALL(H5LTread_dataset(root, name, H5T_NATIVE_UINT64, res.data()));
+
+  return res;
+}
+
+template <class IndexType>
+index_type_var_t convert_to_index_type(std::vector<std::uint64_t> values) {
+  std::vector<IndexType> res(values.size());
+  for (std::size_t i = 0; i < values.size(); i++) {
+    if constexpr (!std::is_signed_v<IndexType>) {
+      res[i] = static_cast<IndexType>(values[i]);
+    } else {
+      std::int64_t signed_value = Kokkos::bit_cast<std::int64_t>(values[i]);
+      res[i]                    = static_cast<IndexType>(signed_value);
+    }
+  }
+
+  return res;
+}
+
+index_type_var_t convert_to_index_type(std::vector<std::uint64_t> values,
+                                       bool index_type_signed,
+                                       std::size_t index_type_size) {
+  if (index_type_signed) {
+    switch (index_type_size) {
+      case 1: return convert_to_index_type<std::int8_t>(values);
+      case 2: return convert_to_index_type<std::int16_t>(values);
+      case 4: return convert_to_index_type<std::int32_t>(values);
+      case 8: return convert_to_index_type<std::int64_t>(values);
+      default:
+        throw std::runtime_error("unexpected index type size " +
+                                 std::to_string(index_type_size));
+    }
+  } else {
+    switch (index_type_size) {
+      case 1: return convert_to_index_type<std::uint8_t>(values);
+      case 2: return convert_to_index_type<std::uint16_t>(values);
+      case 4: return convert_to_index_type<std::uint32_t>(values);
+      case 8: return values;
+      default:
+        throw std::runtime_error("unexpected index type size " +
+                                 std::to_string(index_type_size));
+    }
+  }
+}
+
+void read_policy_from_hdf5(hid_t file) {
+  std::string type = get_hdf5_string_attribute(file, "policy", "type");
+
+  if (type == "none") {
+    policy_type = PolicyType::none;
+    return;
+  }
+
+  int index_type_signed =
+      get_hdf5_int_attribute(file, "policy", "index_type_signed");
+  int index_type_size =
+      get_hdf5_int_attribute(file, "policy", "index_type_size");
+
+  std::vector<std::uint64_t> start_vec;
+  std::vector<std::uint64_t> end_vec;
+  std::vector<std::uint64_t> tile_vec;
+
+  if (type == "scalar") {
+    policy_type = PolicyType::scalar;
+    end_vec.push_back(get_hdf5_uint64_attribute(file, "policy", "end"));
+  } else if (type == "range") {
+    policy_type = PolicyType::range;
+    start_vec.push_back(get_hdf5_uint64_attribute(file, "policy", "begin"));
+    end_vec.push_back(get_hdf5_uint64_attribute(file, "policy", "end"));
+  } else if (type == "mdrange") {
+    policy_type = PolicyType::mdrange;
+
+    int rank = get_hdf5_int_attribute(file, "policy", "rank");
+    switch (rank) {
+#if KOKKOS_VERSION_GREATER_EQUAL(5, 2, 0)
+      case 1: mdrange_policy_rank = std::integral_constant<int, 1>{}; break;
+#endif
+      case 2: mdrange_policy_rank = std::integral_constant<int, 2>{}; break;
+      case 3: mdrange_policy_rank = std::integral_constant<int, 3>{}; break;
+      case 4: mdrange_policy_rank = std::integral_constant<int, 4>{}; break;
+      case 5: mdrange_policy_rank = std::integral_constant<int, 5>{}; break;
+      case 6: mdrange_policy_rank = std::integral_constant<int, 6>{}; break;
+      default:
+        throw std::runtime_error("unexpected mdrange policy rank " +
+                                 std::to_string(rank));
+    }
+
+    // "index_type" in the case of MDRangePolicy should be int64_t
+    assert(index_type_signed);
+    assert(index_type_size == 8);
+
+    start_vec = read_hdf5_uint64_dataset(file, "policy/begin");
+    end_vec   = read_hdf5_uint64_dataset(file, "policy/end");
+    tile_vec  = read_hdf5_uint64_dataset(file, "policy/tile");
+  } else {
+    throw std::runtime_error("Unknown policy type '" + type + "'");
+  }
+
+  policy_start =
+      convert_to_index_type(start_vec, index_type_signed, index_type_size);
+  policy_end =
+      convert_to_index_type(end_vec, index_type_signed, index_type_size);
+  policy_tile =
+      convert_to_index_type(tile_vec, index_type_signed, index_type_size);
+}
+
 std::vector<std::pair<char*, std::size_t>> compute_allocations(
     const std::set<std::pair<char*, std::size_t>>& allocations) {
   if (allocations.empty()) {
@@ -394,6 +557,8 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
                          &idx, impl::read_hdf5_metadata, nullptr, H5P_DEFAULT));
 
   impl::read_functor_from_hdf5(file.get());
+
+  impl::read_policy_from_hdf5(file.get());
 
   file.close_checked();
 
