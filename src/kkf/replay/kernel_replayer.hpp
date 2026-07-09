@@ -70,19 +70,19 @@ void compare_views(View const& view, Tuple args, Functor&& f) {
   using memory_space = View::memory_space;
   using value_type   = View::value_type;
 
-  value_type* in_data = static_cast<value_type*>(
+  value_type* data = static_cast<value_type*>(
       cexa::kernel_replayer::get_allocation<memory_space>(view.label()));
-  value_type* out_data = static_cast<value_type*>(
+  value_type* ref_data = static_cast<value_type*>(
       cexa::kernel_replayer::get_out_allocation<memory_space>(view.label()));
 
   using ViewType = Kokkos::View<
       typename View::data_type, typename View::array_layout, memory_space,
       typename impl::add_unmanaged_trait<typename View::memory_traits>::type>;
 
-  ViewType expected = std::make_from_tuple<ViewType>(
-      std::tuple_cat(std::forward_as_tuple(in_data), args));
   ViewType actual = std::make_from_tuple<ViewType>(
-      std::tuple_cat(std::forward_as_tuple(out_data), args));
+      std::tuple_cat(std::forward_as_tuple(data), args));
+  ViewType expected = std::make_from_tuple<ViewType>(
+      std::tuple_cat(std::forward_as_tuple(ref_data), args));
 
   f(expected, actual);
 }
@@ -93,19 +93,19 @@ void compare_views(const std::string& label, Tuple args, Functor&& f) {
   using memory_space = View::memory_space;
   using value_type   = View::value_type;
 
-  value_type* in_data = static_cast<value_type*>(
+  value_type* data = static_cast<value_type*>(
       cexa::kernel_replayer::get_allocation<memory_space>(label));
-  value_type* out_data = static_cast<value_type*>(
+  value_type* ref_data = static_cast<value_type*>(
       cexa::kernel_replayer::get_out_allocation<memory_space>(label));
 
   using ViewType = Kokkos::View<
       typename View::data_type, typename View::array_layout, memory_space,
       typename impl::add_unmanaged_trait<typename View::memory_traits>::type>;
 
-  ViewType expected = std::make_from_tuple<ViewType>(
-      std::tuple_cat(std::forward_as_tuple(in_data), args));
   ViewType actual = std::make_from_tuple<ViewType>(
-      std::tuple_cat(std::forward_as_tuple(out_data), args));
+      std::tuple_cat(std::forward_as_tuple(data), args));
+  ViewType expected = std::make_from_tuple<ViewType>(
+      std::tuple_cat(std::forward_as_tuple(ref_data), args));
 
   f(expected, actual);
 }
