@@ -244,8 +244,8 @@ std::optional<std::uint64_t> allocation_data_size(
   if (is_hip_range_query_space(space)) {
     void* allocation_base       = nullptr;
     std::size_t allocation_size = 0;
-    const hipError_t error =
-        hipMemGetAddressRange(&allocation_base, &allocation_size, ptr);
+    const hipError_t error      = hipMemGetAddressRange(
+        &allocation_base, &allocation_size, const_cast<void*>(ptr));
     if (error == hipSuccess) {
       return validated_data_size(allocation_base, allocation_size, data_ptr,
                                  reported_size);
