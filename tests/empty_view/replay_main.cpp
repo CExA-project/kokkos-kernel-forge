@@ -19,11 +19,11 @@ int main(int argc, char* argv[]) {
       }));
   Kokkos::fence();
 
-  int* in_data = static_cast<int*>(
-      cexa::kernel_replayer::get_allocation<Kokkos::HostSpace>("empty_values"));
+  using memory_space = Kokkos::View<int*>::memory_space;
+  int* in_data       = static_cast<int*>(
+      cexa::kernel_replayer::get_allocation<memory_space>("empty_values"));
   int* out_data = static_cast<int*>(
-      cexa::kernel_replayer::get_out_allocation<Kokkos::HostSpace>(
-          "empty_values"));
+      cexa::kernel_replayer::get_out_allocation<memory_space>("empty_values"));
 
   if (in_data != nullptr || out_data != nullptr) {
     Kokkos::printf("Expected null replay pointers for an empty view\n");
