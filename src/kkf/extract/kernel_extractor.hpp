@@ -8,15 +8,14 @@
 namespace cexa::kernel_replayer {
 namespace impl {
 void copy_functor(const unsigned char* data, std::size_t size);
-void register_scalar_policy(std::size_t index_type_size, bool index_type_signed,
-                            std::uint64_t N);
+void register_scalar_policy(std::uint64_t N);
 void register_range_policy(const char* space, std::size_t index_type_size,
                            bool index_type_signed, std::uint64_t begin,
                            std::uint64_t end);
 void register_mdrange_policy(const char* space, std::size_t rank,
                              std::size_t index_type_size,
-                             bool index_type_signed, std::uint64_t* begin,
-                             std::uint64_t* end, std::uint64_t* tile);
+                             bool index_type_signed, const std::int64_t* begin,
+                             const std::int64_t* end, const std::int64_t* tile);
 bool next_invocation_will_dump(const char* kernel_name);
 
 template <std::integral IndexType>
@@ -34,11 +33,8 @@ constexpr std::uint64_t index_type_to_u64(IndexType N) {
   }
 }
 
-template <std::integral T>
-void register_bounds(const T& upper_bound) {
-  const auto [idx_type_size, idx_type_signed] = get_index_type_props<T>();
-  register_scalar_policy(idx_type_size, idx_type_signed,
-                         index_type_to_u64(upper_bound));
+inline void register_bounds(const std::size_t upper_bound) {
+  register_scalar_policy(static_cast<std::uint64_t>(upper_bound));
 }
 
 template <class... Args>
@@ -54,8 +50,7 @@ void register_bounds(const Kokkos::RangePolicy<Args...>& policy) {
 
 template <class... Args>
 void register_bounds(const Kokkos::MDRangePolicy<Args...>& policy) {
-  using Policy               = Kokkos::MDRangePolicy<Args...>;
-  constexpr std::size_t rank = Policy::rank;
+  using Policy = Kokkos::MDRangePolicy<Args...>;
 
   // point_type and tile_type are always std::int64_t
   static_assert(
@@ -64,16 +59,10 @@ void register_bounds(const Kokkos::MDRangePolicy<Args...>& policy) {
       std::is_same_v<typename Policy::tile_type::value_type, std::int64_t>);
 
   const auto [idx_type_size, idx_type_signed] =
-      get_index_type_props<std::int64_t>();
-  std::array<std::uint64_t, rank> begin, end, tile;
-  for (std::size_t i = 0; i < rank; i++) {
-    begin[i] = index_type_to_u64(policy.m_lower[i]);
-    end[i]   = index_type_to_u64(policy.m_upper[i]);
-    tile[i]  = index_type_to_u64(policy.m_tile[i]);
-  }
+      get_index_type_props<typename Policy::index_type>();
   register_mdrange_policy(policy.m_space.name(), policy.rank, idx_type_size,
-                          idx_type_signed, begin.data(), end.data(),
-                          tile.data());
+                          idx_type_signed, policy.m_lower.data(),
+                          policy.m_upper.data(), policy.m_tile.data());
 }
 
 }  // namespace impl

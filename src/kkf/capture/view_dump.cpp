@@ -103,8 +103,8 @@ template <class T>
 auto Hdf5Datatype() {
   if constexpr (std::is_same_v<T, unsigned char>) {
     return H5T_NATIVE_UCHAR;
-  } else if constexpr (std::is_same_v<T, std::uint64_t>) {
-    return H5T_NATIVE_UINT64;
+  } else if constexpr (std::is_same_v<T, std::int64_t>) {
+    return H5T_NATIVE_INT64;
   } else {
     static_assert(false, "unsupported datatype");
   }
@@ -135,10 +135,6 @@ void write_policy(hid_t policy_group, const NoPolicyDesc&) {
 
 void write_policy(hid_t policy_group, const ScalarPolicyDesc& policy) {
   write_string_attribute(policy_group, "type", "scalar");
-  write_int_attribute(policy_group, "index_type_size",
-                      policy.index_type_desc.size);
-  write_int_attribute(policy_group, "index_type_signed",
-                      policy.index_type_desc.is_signed);
   write_uint64_attribute(policy_group, "end", policy.end);
 }
 

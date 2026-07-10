@@ -10,13 +10,13 @@ namespace impl {
 
 void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
 void (*copy_functor_function)(const unsigned char*, std::size_t)     = nullptr;
-void (*register_scalar_policy_function)(std::size_t, bool,
-                                        std::uint64_t)               = nullptr;
+void (*register_scalar_policy_function)(std::uint64_t)               = nullptr;
 void (*register_range_policy_function)(const char*, std::size_t, bool,
                                        std::uint64_t, std::uint64_t) = nullptr;
 void (*register_mdrange_policy_function)(const char*, std::size_t, std::size_t,
-                                         bool, std::uint64_t*, std::uint64_t*,
-                                         std::uint64_t*)             = nullptr;
+                                         bool, const std::int64_t*,
+                                         const std::int64_t*,
+                                         const std::int64_t*)        = nullptr;
 bool (*next_invocation_will_dump_function)(const char*)              = nullptr;
 std::optional<bool> has_kernel_dump_tool = std::nullopt;
 
@@ -61,12 +61,12 @@ void init_internal_functions() {
     } else {
       add_metadata_function = [](const char*, const char*, std::size_t) {};
       copy_functor_function = [](const unsigned char*, std::size_t) {};
-      register_scalar_policy_function = [](std::size_t, bool, std::uint64_t) {};
+      register_scalar_policy_function = [](std::uint64_t) {};
       register_range_policy_function  = [](const char*, std::size_t, bool,
                                           std::uint64_t, std::uint64_t) {};
-      register_mdrange_policy_function   = [](const char*, std::size_t,
-                                            std::size_t, bool, std::uint64_t*,
-                                            std::uint64_t*, std::uint64_t*) {};
+      register_mdrange_policy_function =
+          [](const char*, std::size_t, std::size_t, bool, const std::int64_t*,
+             const std::int64_t*, const std::int64_t*) {};
       next_invocation_will_dump_function = [](const char*) { return false; };
       has_kernel_dump_tool               = false;
     }
@@ -78,10 +78,9 @@ void copy_functor(const unsigned char* data, std::size_t size) {
   copy_functor_function(data, size);
 }
 
-void register_scalar_policy(std::size_t index_type_size, bool index_type_signed,
-                            std::uint64_t N) {
+void register_scalar_policy(std::uint64_t N) {
   init_internal_functions();
-  register_scalar_policy_function(index_type_size, index_type_signed, N);
+  register_scalar_policy_function(N);
 }
 
 void register_range_policy(const char* space, std::size_t index_type_size,
@@ -94,8 +93,9 @@ void register_range_policy(const char* space, std::size_t index_type_size,
 
 void register_mdrange_policy(const char* space, std::size_t rank,
                              std::size_t index_type_size,
-                             bool index_type_signed, std::uint64_t* begin,
-                             std::uint64_t* end, std::uint64_t* tile) {
+                             bool index_type_signed, const std::int64_t* begin,
+                             const std::int64_t* end,
+                             const std::int64_t* tile) {
   init_internal_functions();
   register_mdrange_policy_function(space, rank, index_type_size,
                                    index_type_signed, begin, end, tile);

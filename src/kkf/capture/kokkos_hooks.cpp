@@ -243,8 +243,8 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_functor(
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_scalar_policy(
-    std::size_t index_type_size, bool index_type_signed, std::uint64_t N) {
-  policy = kkf::ScalarPolicyDesc({index_type_size, index_type_signed}, N);
+    std::uint64_t N) {
+  policy = kkf::ScalarPolicyDesc(N);
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
@@ -256,8 +256,8 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
     const char* space, std::size_t rank, std::size_t index_type_size,
-    bool index_type_signed, std::uint64_t* begin, std::uint64_t* end,
-    std::uint64_t* tile) {
+    bool index_type_signed, const std::int64_t* begin, const std::int64_t* end,
+    const std::int64_t* tile) {
   policy = kkf::MDRangePolicyDesc({index_type_size, index_type_signed}, space,
                                   rank, std::vector(begin, begin + rank),
                                   std::vector(end, end + rank),

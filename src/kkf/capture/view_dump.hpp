@@ -25,7 +25,6 @@ struct IndexTypeDesc {
 struct NoPolicyDesc {};
 
 struct ScalarPolicyDesc {
-  IndexTypeDesc index_type_desc;
   std::uint64_t end;
 };
 
@@ -40,9 +39,9 @@ struct MDRangePolicyDesc {
   IndexTypeDesc index_type_desc;
   const char* space;
   std::size_t rank;
-  std::vector<std::uint64_t> begin;
-  std::vector<std::uint64_t> end;
-  std::vector<std::uint64_t> tile;
+  std::vector<std::int64_t> begin;
+  std::vector<std::int64_t> end;
+  std::vector<std::int64_t> tile;
 };
 
 ViewDumpResult dump_view_snapshot(

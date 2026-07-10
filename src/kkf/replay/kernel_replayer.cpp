@@ -355,8 +355,8 @@ void read_functor_from_hdf5(hid_t file) {
       H5LTread_dataset(file, "functor", H5T_NATIVE_UCHAR, functor_data.data()));
 }
 
-std::vector<std::uint64_t> read_hdf5_uint64_dataset(hid_t root,
-                                                    const char* name) {
+std::vector<std::int64_t> read_hdf5_int64_dataset(hid_t root,
+                                                  const char* name) {
   int dataset_rank = 0;
   CHECK_HDF5_CALL(H5LTget_dataset_ndims(root, name, &dataset_rank));
   assert(dataset_rank == 1);
@@ -366,48 +366,32 @@ std::vector<std::uint64_t> read_hdf5_uint64_dataset(hid_t root,
   CHECK_HDF5_CALL(
       H5LTget_dataset_info(root, name, &dim, &datatype, &datatype_size));
   assert(datatype == H5T_INTEGER);
-  assert(datatype_size == sizeof(std::uint64_t));
+  assert(datatype_size == sizeof(std::int64_t));
 
-  std::vector<std::uint64_t> res(dim);
-  CHECK_HDF5_CALL(H5LTread_dataset(root, name, H5T_NATIVE_UINT64, res.data()));
-
-  return res;
-}
-
-template <class IndexType>
-index_type_var_t convert_to_index_type(std::vector<std::uint64_t> values) {
-  std::vector<IndexType> res(values.size());
-  for (std::size_t i = 0; i < values.size(); i++) {
-    if constexpr (!std::is_signed_v<IndexType>) {
-      res[i] = static_cast<IndexType>(values[i]);
-    } else {
-      std::int64_t signed_value = Kokkos::bit_cast<std::int64_t>(values[i]);
-      res[i]                    = static_cast<IndexType>(signed_value);
-    }
-  }
+  std::vector<std::int64_t> res(dim);
+  CHECK_HDF5_CALL(H5LTread_dataset(root, name, H5T_NATIVE_INT64, res.data()));
 
   return res;
 }
 
-index_type_var_t convert_to_index_type(std::vector<std::uint64_t> values,
-                                       bool index_type_signed,
-                                       std::size_t index_type_size) {
+index_type_var_t get_policy_index_type_from_props(bool index_type_signed,
+                                                  std::size_t index_type_size) {
   if (index_type_signed) {
     switch (index_type_size) {
-      case 1: return convert_to_index_type<std::int8_t>(values);
-      case 2: return convert_to_index_type<std::int16_t>(values);
-      case 4: return convert_to_index_type<std::int32_t>(values);
-      case 8: return convert_to_index_type<std::int64_t>(values);
+      case 1: return std::int8_t{};
+      case 2: return std::int16_t{};
+      case 4: return std::int32_t{};
+      case 8: return std::int64_t{};
       default:
         throw std::runtime_error("unexpected index type size " +
                                  std::to_string(index_type_size));
     }
   } else {
     switch (index_type_size) {
-      case 1: return convert_to_index_type<std::uint8_t>(values);
-      case 2: return convert_to_index_type<std::uint16_t>(values);
-      case 4: return convert_to_index_type<std::uint32_t>(values);
-      case 8: return values;
+      case 1: return std::uint8_t{};
+      case 2: return std::uint16_t{};
+      case 4: return std::uint32_t{};
+      case 8: return std::uint64_t{};
       default:
         throw std::runtime_error("unexpected index type size " +
                                  std::to_string(index_type_size));
@@ -415,41 +399,35 @@ index_type_var_t convert_to_index_type(std::vector<std::uint64_t> values,
   }
 }
 
-void set_policy_exec_space_from_name(const std::string& space) {
+exec_space_var_t get_policy_exec_space_from_name(const std::string& space) {
 #if defined(KOKKOS_ENABLE_SERIAL)
   if (space == "Serial") {
-    policy_exec_space = ExecSpaceTag<Kokkos::Serial>{};
-    return;
+    return ExecSpaceTag<Kokkos::Serial>{};
   }
 #endif
 #if defined(KOKKOS_ENABLE_OPENMP)
   if (space == "OpenMP") {
-    policy_exec_space = ExecSpaceTag<Kokkos::OpenMP>{};
-    return;
+    return ExecSpaceTag<Kokkos::OpenMP>{};
   }
 #endif
 #if defined(KOKKOS_ENABLE_THREADS)
   if (space == "Threads") {
-    policy_exec_space = ExecSpaceTag<Kokkos::Threads>{};
-    return;
+    return ExecSpaceTag<Kokkos::Threads>{};
   }
 #endif
 #if defined(KOKKOS_ENABLE_HPX)
   if (space == "HPX") {
-    policy_exec_space = ExecSpaceTag<Kokkos::HPX>{};
-    return;
+    return ExecSpaceTag<Kokkos::HPX>{};
   }
 #endif
 #if defined(KOKKOS_ENABLE_CUDA)
   if (space == "Cuda") {
-    policy_exec_space = ExecSpaceTag<Kokkos::Cuda>{};
-    return;
+    return ExecSpaceTag<Kokkos::Cuda>{};
   }
 #endif
 #if defined(KOKKOS_ENABLE_HIP)
   if (space == "HIP") {
-    policy_exec_space = ExecSpaceTag<Kokkos::HIP>{};
-    return;
+    return ExecSpaceTag<Kokkos::HIP>{};
   }
 #endif
   throw std::runtime_error("No enabled execution space corresponds to " +
@@ -460,66 +438,60 @@ void read_policy_from_hdf5(hid_t file) {
   std::string type = get_hdf5_string_attribute(file, "policy", "type");
 
   if (type == "none") {
-    policy_type = PolicyType::none;
     return;
   }
 
-  int index_type_signed =
+  if (type == "scalar") {
+    replay_policy =
+        ScalarPolicyDesc{get_hdf5_uint64_attribute(file, "policy", "end")};
+    return;
+  }
+
+  const int index_type_signed =
       get_hdf5_int_attribute(file, "policy", "index_type_signed");
-  int index_type_size =
+  const int index_type_size =
       get_hdf5_int_attribute(file, "policy", "index_type_size");
 
-  std::vector<std::uint64_t> start_vec;
-  std::vector<std::uint64_t> end_vec;
-  std::vector<std::uint64_t> tile_vec;
+  const index_type_var_t index_type =
+      get_policy_index_type_from_props(index_type_signed, index_type_size);
 
-  if (type == "scalar") {
-    policy_type = PolicyType::scalar;
-    end_vec.push_back(get_hdf5_uint64_attribute(file, "policy", "end"));
-  } else if (type == "range") {
-    policy_type = PolicyType::range;
-    start_vec.push_back(get_hdf5_uint64_attribute(file, "policy", "begin"));
-    end_vec.push_back(get_hdf5_uint64_attribute(file, "policy", "end"));
+  const std::string exec_space_name =
+      get_hdf5_string_attribute(file, "policy", "space");
+  const exec_space_var_t exec_space =
+      get_policy_exec_space_from_name(exec_space_name);
+
+  if (type == "range") {
+    std::uint64_t begin = get_hdf5_uint64_attribute(file, "policy", "begin");
+    std::uint64_t end   = get_hdf5_uint64_attribute(file, "policy", "end");
+    replay_policy       = RangePolicyDesc{begin, end, index_type, exec_space};
   } else if (type == "mdrange") {
-    policy_type = PolicyType::mdrange;
-
-    int rank = get_hdf5_int_attribute(file, "policy", "rank");
+    mdrange_rank_var_t policy_rank;
+    const int rank = get_hdf5_int_attribute(file, "policy", "rank");
     switch (rank) {
 #if KOKKOS_VERSION_GREATER_EQUAL(5, 2, 0)
-      case 1: mdrange_policy_rank = std::integral_constant<int, 1>{}; break;
+      case 1: policy_rank = std::integral_constant<int, 1>{}; break;
 #endif
-      case 2: mdrange_policy_rank = std::integral_constant<int, 2>{}; break;
-      case 3: mdrange_policy_rank = std::integral_constant<int, 3>{}; break;
-      case 4: mdrange_policy_rank = std::integral_constant<int, 4>{}; break;
-      case 5: mdrange_policy_rank = std::integral_constant<int, 5>{}; break;
-      case 6: mdrange_policy_rank = std::integral_constant<int, 6>{}; break;
+      case 2: policy_rank = std::integral_constant<int, 2>{}; break;
+      case 3: policy_rank = std::integral_constant<int, 3>{}; break;
+      case 4: policy_rank = std::integral_constant<int, 4>{}; break;
+      case 5: policy_rank = std::integral_constant<int, 5>{}; break;
+      case 6: policy_rank = std::integral_constant<int, 6>{}; break;
       default:
         throw std::runtime_error("unexpected mdrange policy rank " +
                                  std::to_string(rank));
     }
 
-    // "index_type" in the case of MDRangePolicy should be int64_t
-    assert(index_type_signed);
-    assert(index_type_size == 8);
+    std::vector<std::int64_t> begin =
+        read_hdf5_int64_dataset(file, "policy/begin");
+    std::vector<std::int64_t> end = read_hdf5_int64_dataset(file, "policy/end");
+    std::vector<std::int64_t> tile =
+        read_hdf5_int64_dataset(file, "policy/tile");
 
-    start_vec = read_hdf5_uint64_dataset(file, "policy/begin");
-    end_vec   = read_hdf5_uint64_dataset(file, "policy/end");
-    tile_vec  = read_hdf5_uint64_dataset(file, "policy/tile");
+    replay_policy = MDRangePolicyDesc{begin,      end,        tile,
+                                      index_type, exec_space, policy_rank};
   } else {
     throw std::runtime_error("Unknown policy type '" + type + "'");
   }
-
-  if (policy_type != PolicyType::scalar) {
-    std::string exec_space = get_hdf5_string_attribute(file, "policy", "space");
-    set_policy_exec_space_from_name(exec_space);
-  }
-
-  policy_start =
-      convert_to_index_type(start_vec, index_type_signed, index_type_size);
-  policy_end =
-      convert_to_index_type(end_vec, index_type_signed, index_type_size);
-  policy_tile =
-      convert_to_index_type(tile_vec, index_type_signed, index_type_size);
 }
 
 std::vector<std::pair<char*, std::size_t>> compute_allocations(
