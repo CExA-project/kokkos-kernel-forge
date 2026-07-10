@@ -4,10 +4,14 @@
 # SPDX-FileCopyrightText: (C) The Kokkos-FFT development team, see Kokkos-FFT COPYRIGHT.md
 # SPDX-License-Identifier: MIT OR Apache-2.0 WITH LLVM-exception
 
-name: Ruche CUDA build and test
+name: Ruche build and test
 
 on:
   workflow_dispatch:
+  # Temporary PR validation trigger: remove before merging.
+  push:
+    branches:
+    - ci/ruche-openmp
   schedule:
   - cron: "30 0 * * 1-5" # every weekday at midnight UTC
 
@@ -33,6 +37,21 @@ jobs:
         cxx_standard:
         - 20
         backend:
+        - name: OpenMP-x86_64-GCC/15.1.0-Shared
+          modules: >-
+            gcc/15.1.0/gcc-15.1.0
+            cmake/3.31.9/gcc-15.1.0
+            python/3.14.0/gcc-15.1.0
+          test: -e cpu OMP_PROC_BIND=spread OMP_PLACES=threads
+          kokkos_configure: >-
+            -DKokkos_ENABLE_OPENMP=ON
+            -DBUILD_SHARED_LIBS=ON
+          kkf_configure: >-
+            -DKKF_BUILD_EXAMPLES=ON
+            -DKKF_BUILD_TESTS=ON
+            -DKKF_ENABLE_WARNINGS=ON
+            -DKKF_ENABLE_ASAN=OFF
+            -DKKF_ENABLE_UBSAN=OFF
         - name: CUDA-A100-GCC/13.4.0-CUDA/12.8.1-Static-CUDA_CONSTEXPR-CUDA_RELOCATABLE_DEVICE_CODE
           modules: >-
             gcc/13.4.0/gcc-15.1.0
