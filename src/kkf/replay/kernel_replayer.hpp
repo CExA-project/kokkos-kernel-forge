@@ -46,6 +46,42 @@ using index_type_var_t =
                  std::vector<std::int32_t>, std::vector<std::uint32_t>,
                  std::vector<std::int64_t>, std::vector<std::uint64_t>>;
 
+// NOTE: We don't use execution space instances in the variant since we need to
+// initialize it before Kokkos is initalized
+template <class Space>
+struct ExecSpaceTag {
+  using space = Space;
+};
+
+// Variant which is visited at runtime to handle the execution space of the
+// execution policies
+using exec_space_var_t = std::variant<std::monostate
+#if defined(KOKKOS_ENABLE_SERIAL)
+                                      ,
+                                      ExecSpaceTag<Kokkos::Serial>
+#endif
+#if defined(KOKKOS_ENABLE_OPENMP)
+                                      ,
+                                      ExecSpaceTag<Kokkos::OpenMP>
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+                                      ,
+                                      ExecSpaceTag<Kokkos::Threads>
+#endif
+#if defined(KOKKOS_ENABLE_HPX)
+                                      ,
+                                      ExecSpaceTag<Kokkos::HPX>
+#endif
+#if defined(KOKKOS_ENABLE_CUDA)
+                                      ,
+                                      ExecSpaceTag<Kokkos::Cuda>
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+                                      ,
+                                      ExecSpaceTag<Kokkos::HIP>
+#endif
+                                      >;
+
 // Variant which is visited at runtime to handle the compile time rank of
 // MDRangePolicy
 using mdrange_rank_var_t = std::variant<
@@ -63,6 +99,7 @@ inline PolicyType policy_type;
 inline index_type_var_t policy_start;
 inline index_type_var_t policy_end;
 inline index_type_var_t policy_tile;
+inline exec_space_var_t policy_exec_space;
 inline mdrange_rank_var_t mdrange_policy_rank;
 
 template <class IndexType>
@@ -74,15 +111,15 @@ auto get_scalar_policy(const std::vector<IndexType>& end) {
 // same type. But since we visit a variant holding every possible index type,
 // the compiler will instantiate every combination of index types, thus the need
 // to use multiple template parameters and std::common_type.
-template <class IndexType1, class IndexType2>
+template <class ExecSpace, class IndexType1, class IndexType2>
 auto get_range_policy(const std::vector<IndexType1>& start,
                       const std::vector<IndexType2>& end) {
   using IndexType = std::common_type_t<IndexType1, IndexType2>;
-  return Kokkos::RangePolicy(static_cast<IndexType>(start[0]),
-                             static_cast<IndexType>(end[0]));
+  return Kokkos::RangePolicy<ExecSpace>(static_cast<IndexType>(start[0]),
+                                        static_cast<IndexType>(end[0]));
 }
 
-template <int rank, class IndexType>
+template <int rank, class ExecSpace, class IndexType>
 auto get_mdrange_policy(const std::vector<IndexType>& start,
                         const std::vector<IndexType>& end,
                         const std::vector<IndexType>& tile) {
@@ -94,7 +131,9 @@ auto get_mdrange_policy(const std::vector<IndexType>& start,
     end_arr[i]   = static_cast<IndexType>(end[i]);
     tile_arr[i]  = static_cast<IndexType>(tile[i]);
   }
-  return Kokkos::MDRangePolicy(start_arr, end_arr, tile_arr);
+  // TODO: handle iteration patterns
+  return Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<rank>>(
+      start_arr, end_arr, tile_arr);
 }
 
 // NOTE: Since we resolve the rank using a variant, when calling visit, the
@@ -345,23 +384,36 @@ void parallel_for(const std::string& label, [[maybe_unused]] const Policy& p,
           impl::policy_end);
     } else if (impl::policy_type == impl::PolicyType::range) {
       std::visit(
-          [&](auto&& start, auto&& end) {
-            Kokkos::parallel_for(label, impl::get_range_policy(start, end), f);
+          [&]<class ExecSpaceTag>(auto&& start, auto&& end, ExecSpaceTag) {
+            if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+              Kokkos::parallel_for(
+                  label,
+                  impl::get_range_policy<typename ExecSpaceTag::space>(start,
+                                                                       end),
+                  f);
+            }
           },
-          impl::policy_start, impl::policy_end);
+          impl::policy_start, impl::policy_end, impl::policy_exec_space);
     } else {
       std::visit(
-          [&]<int i>(std::integral_constant<int, i>) {
-            // MDRangePolicy's point_type and tile_type are always std::int64_t
-            auto& start =
-                std::get<std::vector<std::int64_t>>(impl::policy_start);
-            auto& end  = std::get<std::vector<std::int64_t>>(impl::policy_end);
-            auto& tile = std::get<std::vector<std::int64_t>>(impl::policy_tile);
+          [&]<int rank, class ExecSpaceTag>(std::integral_constant<int, rank>,
+                                            ExecSpaceTag) {
+            if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+              // MDRangePolicy's point_type and tile_type are always
+              // std::int64_t
+              auto& start =
+                  std::get<std::vector<std::int64_t>>(impl::policy_start);
+              auto& end = std::get<std::vector<std::int64_t>>(impl::policy_end);
+              auto& tile =
+                  std::get<std::vector<std::int64_t>>(impl::policy_tile);
 
-            auto policy = impl::get_mdrange_policy<i>(start, end, tile);
-            Kokkos::parallel_for(label, policy, f);
+              auto policy =
+                  impl::get_mdrange_policy<rank, typename ExecSpaceTag::space>(
+                      start, end, tile);
+              Kokkos::parallel_for(label, policy, f);
+            }
           },
-          impl::mdrange_policy_rank);
+          impl::mdrange_policy_rank, impl::policy_exec_space);
     }
   }
 }

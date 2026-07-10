@@ -415,6 +415,47 @@ index_type_var_t convert_to_index_type(std::vector<std::uint64_t> values,
   }
 }
 
+void set_policy_exec_space_from_name(const std::string& space) {
+#if defined(KOKKOS_ENABLE_SERIAL)
+  if (space == "Serial") {
+    policy_exec_space = ExecSpaceTag<Kokkos::Serial>{};
+    return;
+  }
+#endif
+#if defined(KOKKOS_ENABLE_OPENMP)
+  if (space == "OpenMP") {
+    policy_exec_space = ExecSpaceTag<Kokkos::OpenMP>{};
+    return;
+  }
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+  if (space == "Threads") {
+    policy_exec_space = ExecSpaceTag<Kokkos::Threads>{};
+    return;
+  }
+#endif
+#if defined(KOKKOS_ENABLE_HPX)
+  if (space == "HPX") {
+    policy_exec_space = ExecSpaceTag<Kokkos::HPX>{};
+    return;
+  }
+#endif
+#if defined(KOKKOS_ENABLE_CUDA)
+  if (space == "Cuda") {
+    policy_exec_space = ExecSpaceTag<Kokkos::Cuda>{};
+    return;
+  }
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+  if (space == "HIP") {
+    policy_exec_space = ExecSpaceTag<Kokkos::HIP>{};
+    return;
+  }
+#endif
+  throw std::runtime_error("No enabled execution space corresponds to " +
+                           space);
+}
+
 void read_policy_from_hdf5(hid_t file) {
   std::string type = get_hdf5_string_attribute(file, "policy", "type");
 
@@ -466,6 +507,11 @@ void read_policy_from_hdf5(hid_t file) {
     tile_vec  = read_hdf5_uint64_dataset(file, "policy/tile");
   } else {
     throw std::runtime_error("Unknown policy type '" + type + "'");
+  }
+
+  if (policy_type != PolicyType::scalar) {
+    std::string exec_space = get_hdf5_string_attribute(file, "policy", "space");
+    set_policy_exec_space_from_name(exec_space);
   }
 
   policy_start =
