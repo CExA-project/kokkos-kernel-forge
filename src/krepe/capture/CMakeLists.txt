@@ -35,6 +35,9 @@ target_compile_definitions(
 if(Kokkos_ENABLE_CUDA)
   find_package(CUDAToolkit REQUIRED)
   target_compile_definitions(krepe_kokkos_hooks PRIVATE KREPE_ENABLE_CUDA_DUMP)
+  # TODO(kokkos/kokkos#9337): Remove CUDA::cuda_driver with the temporary
+  # cuMemGetAddressRange query once KREPE requires a Kokkos release containing
+  # the fix.
   target_link_libraries(krepe_kokkos_hooks PRIVATE CUDA::cudart CUDA::cuda_driver)
 endif()
 if(Kokkos_ENABLE_HIP)
