@@ -199,6 +199,8 @@ const void* allocation_data_pointer(const void* ptr) {
 // (Host, CUDA, and HIP), and kkf requires a Kokkos release containing that fix.
 std::size_t host_allocation_size(const void* ptr) {
 #if defined(__linux__)
+  // The allocator may reserve more memory than Kokkos requested, so
+  // malloc_usable_size(ptr) can return a larger size than the requested one.
   return malloc_usable_size(const_cast<void*>(ptr));
 #else
   (void)ptr;

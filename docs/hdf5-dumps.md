@@ -34,9 +34,11 @@ label         # Kokkos allocation label
 space         # Kokkos memory space name reported by the profiling hook
 ptr           # allocation pointer value, stored as text
 p_data        # user data pointer after the Kokkos allocation header
-size          # bounded user data size in bytes, 0 when it cannot be bounded
+size          # bounded user-data bytes, 0 for empty or unbounded allocations
 reported_size # size reported by the Kokkos profiling allocation hook
-bytes_dumped
+bytes_dumped  # 1 when the bytes dataset was written, 0 when it was skipped
+skip_reason   # present only when bytes_dumped is 0
+bytes         # byte dataset, present when bytes_dumped is 1
 ```
 
 The `/metadata` group contains user specified metadata
