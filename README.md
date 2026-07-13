@@ -22,7 +22,8 @@ target_link_libraries(my_program PRIVATE kkf::kernel_replayer)
 ## Extraction
 
 In order to extract a kernel from a program, you have to:
-1. wrap the functor in the parallel construct call with `cexa::kernel_replayer::replay_functor`
+1. replace the desired `Kokkos::parallel_for` with `cexa::kernel_replayer::parallel_for`,
+   this will allow to save the execution policy and the kernel's data
 2. execute with the `libkkf.so` kokkos tool
 
 For example, the following program:
@@ -48,7 +49,7 @@ Will become
 ```cpp
 #include <Kokkos_Core.hpp>
 
-#include <kkf/extractor.hpp> // this provides replay_functor()
+#include <kkf/extractor.hpp>
 
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
@@ -58,17 +59,18 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  Kokkos::parallel_for("scale", N,
-                       // we wrap the functor with replay_functor(functor)
-                       cexa::kernel_replayer::replay_functor(
-                           KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
+  // We replace the Kokkos parallel_for with the one from cexa::kernel_replayer
+  cexa::kernel_replayer::parallel_for(
+      "scale", N, KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();
 
   return 0;
 }
 ```
 
-The program has to be linked with `cexa::kernel_extractor`, it then has to be executed with
+The program has to be linked with `cexa::kernel_extractor`, it then has to be
+executed with the following environment variables in order to extract the first
+invokation of the kernel named "scale"
 ```sh
 KOKKOS_TOOLS_LIBS=/path/to/libkkf.so \
 KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=scale
@@ -78,6 +80,25 @@ KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=scale
 
 This will generate two hdf5 files named `kkf_scale_2_{in,out}.h5`, see [HDF5 dump format](docs/hdf5-dumps.md) for the file naming scheme and
 stored metadata.
+
+### Parallel_for wrapper
+
+If you are trying to extract a kernel used in a parallel_for wrapper provided
+by another library, you can use the `cexa::kernel_replayer::replay_functor`
+function to save the functor's data
+
+```cpp
+#include <kkf/extractor.hpp>
+
+int main() {
+  Kokkod::View<int*> view("view", N);
+  my_funky_parallel_for("kernel", N,
+                        cexa::kernel_replayer::replay_functor(
+                            KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
+}
+```
+
+Note that the execution policy cannot be saved in this case.
 
 ## Replay
 
@@ -91,24 +112,25 @@ The program above becomes
 ```cpp
 #include <Kokkos_Core.hpp>
 
-#include <kkf/replayer.hpp> // <kkf/extractor.hpp> -> <kkf/replayer.hpp>
+#include <kkf/replayer.hpp>  // <kkf/extractor.hpp> -> <kkf/replayer.hpp>
 
 int main(int argc, char* argv[]) {
   // We initialize the replayer before Kokkos
   cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
+  // The execution policy could be ignored, as it will be restored from the dump
   const int N = 1024;
-  // We don't care about the values inside the view, we only need it to have the same type as in the original program
+  // We don't care about the values inside the view, we only need it to have the
+  // same type as in the original program
   Kokkos::View<int*> values;
-  // No need to initialize, the initialized view from the original program is captured in the dump
-  // Kokkos::parallel_for(
+  // No need to initialize, the initialized view from the original program is
+  // captured in the dump Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  Kokkos::parallel_for("scale", N,
-                       // we still wrap the functor with replay_functor(functor)
-                       cexa::kernel_replayer::replay_functor(
-                           KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
+  // we still replace with cexa::kernel_replayer::parallel_for
+  cexa::kernel_replayer::parallel_for(
+      "scale", N, KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();
 
   return 0;
@@ -119,6 +141,15 @@ The program has to be linked with `cexa::kernel_replayer`, the dumps are passed 
 ```sh
 ./replay_prog --kernel-replayer-dump=kkf_scale_2_in.h5 --kernel-replayer-out-dump=kkf_scale_2_out.h5
 ```
+
+### Modifying the execution policy
+
+By default, `cexa::kernel_replayer::parallel_for` will use the execution policy
+that was saved in the dump. You can override this by passing
+`cexa::kernel_replayer::force_policy(your_policy)` as the execution policy
+argument.
+
+### Accessing the allocations
 
 The value of allocations from the original program can be accessed using the
 `get_allocation` and `get_out_allocation` for the values before and after the
@@ -133,3 +164,15 @@ Kokkos::View<int*> intial_values(initial_values_ptr, 1024);
 int* result_values_ptr = static_cast<int*>(cexa::kernel_replayer::get_out_allocation<memory_space>("values");
 Kokkos::View<int*> result_values(initial_values_ptr, 1024);
 ```
+
+## Limitations
+
+- Only the memory allocations going through Kokkos are captured (e.g. Views, `Kokkos::malloc`)
+- Kernels taking a single generic argument are not supported
+  (`KOKKOS_LAMBDA(auto i) { ... }`), if you still want to keep your kernel
+  generic, you can use concepts to constrain the argument to either an integer or
+  a Kokkos team handle:
+  - For `RangePolicy`: `KOKKOS_LABMDA(std::integral auto i) { ... }`
+  - For `TeamPolicy`: `KOKKOS_LAMBDA(Kokkos::TeamHandle auto team) { ... }`
+- The `LaunchBounds` and `WorkTag` template arguments for execution policies
+  cannot be automatically extracted and restored

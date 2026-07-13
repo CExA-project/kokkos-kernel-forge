@@ -37,3 +37,35 @@ p_data       # user data pointer after the Kokkos allocation header
 size         # allocation size in bytes
 bytes_dumped
 ```
+
+The `/metadata` group contains user specified metadata
+
+The `/policy` group contains the type of policy that was saved as well as its
+compile-time and runtime attributes
+```
+type              # the type of policy stored, or "none" if no policy was recorded
+space             # the execution space's name (for every type except scalar)
+index_type_size   # size in bytes of the policy's index_type (for every type except scalar)
+index_type_signed # whether the policy's index_type is signed (for every type except scalar)
+
+# type == "scalar"
+end # the end index
+
+# type == "range"
+begin # the starting index
+end   # the end index
+
+# type == "mdrange"
+rank  # the policy's rank
+begin # int64_t dataset storing the starting indices
+end   # int64_t dataset storing the end indices
+tile  # int64_t dataset storing the tile dimensions
+
+# type == "team"
+team_size       # number of threads per team
+league_size     # number of teams
+team_scratch0   # amount of level 0 scratch memory per team, in bytes
+team_scratch1   # amount of level 1 scratch memory per team, in bytes
+thread_scratch0 # amount of level 0 scratch memory per thread, in bytes
+thread_scratch1 # amount of level 1 scratch memory per thread, in bytes
+```
