@@ -489,6 +489,21 @@ void read_policy_from_hdf5(hid_t file) {
 
     replay_policy = MDRangePolicyDesc{begin,      end,        tile,
                                       index_type, exec_space, policy_rank};
+  } else if (type == "team") {
+    const int team_size = get_hdf5_int_attribute(file, "policy", "team_size");
+    const int league_size =
+        get_hdf5_int_attribute(file, "policy", "league_size");
+    const int team_scratch_0 =
+        get_hdf5_int_attribute(file, "policy", "team_scratch_0");
+    const int team_scratch_1 =
+        get_hdf5_int_attribute(file, "policy", "team_scratch_1");
+    const int thread_scratch_0 =
+        get_hdf5_int_attribute(file, "policy", "thread_scratch_0");
+    const int thread_scratch_1 =
+        get_hdf5_int_attribute(file, "policy", "thread_scratch_1");
+    replay_policy = TeamPolicyDesc{
+        team_size,        league_size,      team_scratch_0, team_scratch_1,
+        thread_scratch_0, thread_scratch_1, index_type,     exec_space};
   } else {
     throw std::runtime_error("Unknown policy type '" + type + "'");
   }

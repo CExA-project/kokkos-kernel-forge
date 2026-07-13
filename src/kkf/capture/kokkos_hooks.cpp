@@ -63,7 +63,7 @@ kkf::AllocationTracker allocation_tracker;
 std::vector<unsigned char> functor_data;
 std::unordered_map<std::string, std::string> metadata;
 std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc, kkf::RangePolicyDesc,
-             kkf::MDRangePolicyDesc>
+             kkf::MDRangePolicyDesc, kkf::TeamPolicyDesc>
     policy = kkf::NoPolicyDesc{};
 
 std::string dump_kernel_label;
@@ -262,6 +262,15 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
                                   rank, std::vector(begin, begin + rank),
                                   std::vector(end, end + rank),
                                   std::vector(tile, tile + rank));
+}
+
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_team_policy(
+    const char* space, std::size_t index_type_size, bool index_type_signed,
+    int team_size, int league_size, int team_scratch_0, int team_scratch_1,
+    int thread_scratch_0, int thread_scratch_1) {
+  policy = kkf::TeamPolicyDesc(
+      {index_type_size, index_type_signed}, space, team_size, league_size,
+      team_scratch_0, team_scratch_1, thread_scratch_0, thread_scratch_1);
 }
 
 KOKKOS_HOOKS_EXPORT bool cexa_kernel_dump_next_invocation_will_dump(

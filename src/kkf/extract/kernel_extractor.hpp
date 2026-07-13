@@ -7,6 +7,11 @@
 
 namespace cexa::kernel_replayer {
 namespace impl {
+struct scratch_description {
+  int level0;
+  int level1;
+};
+
 void copy_functor(const unsigned char* data, std::size_t size);
 void register_scalar_policy(std::uint64_t N);
 void register_range_policy(const char* space, std::size_t index_type_size,
@@ -16,6 +21,11 @@ void register_mdrange_policy(const char* space, std::size_t rank,
                              std::size_t index_type_size,
                              bool index_type_signed, const std::int64_t* begin,
                              const std::int64_t* end, const std::int64_t* tile);
+void register_team_policy(const char* space, std::size_t index_type_size,
+                          bool index_type_signed, int team_size,
+                          int league_size,
+                          const scratch_description& team_scratch,
+                          const scratch_description& thread_scratch);
 bool next_invocation_will_dump(const char* kernel_name);
 
 template <std::integral IndexType>
@@ -63,6 +73,30 @@ void register_bounds(const Kokkos::MDRangePolicy<Args...>& policy) {
   register_mdrange_policy(policy.m_space.name(), policy.rank, idx_type_size,
                           idx_type_signed, policy.m_lower.data(),
                           policy.m_upper.data(), policy.m_tile.data());
+}
+
+template <class... Args>
+void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
+  using Policy = Kokkos::TeamPolicy<Args...>;
+  const auto [idx_type_size, idx_type_signed] =
+      get_index_type_props<typename Policy::index_type>();
+
+// FIXME: Add the correct Kokkos version once the required PR lands into a
+// release
+#if KOKKOS_VERSION_GREATER(5, 2, 99)
+  scratch_description team_scratch{
+      .level0 = static_cast<int>(policy.team_scratch_size(0)),
+      .level1 = static_cast<int>(policy.team_scratch_size(1))};
+  scratch_description thread_scratch{
+      .level0 = static_cast<int>(policy.thread_scratch_size(0)),
+      .level1 = static_cast<int>(policy.thread_scratch_size(1))};
+#else
+  scratch_description team_scratch{-1, -1};
+  scratch_description thread_scratch{-1, -1};
+#endif
+  register_team_policy(Policy::execution_space::name(), idx_type_size,
+                       idx_type_signed, policy.team_size(),
+                       policy.league_size(), team_scratch, thread_scratch);
 }
 
 }  // namespace impl

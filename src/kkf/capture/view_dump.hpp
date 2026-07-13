@@ -44,12 +44,24 @@ struct MDRangePolicyDesc {
   std::vector<std::int64_t> tile;
 };
 
+struct TeamPolicyDesc {
+  IndexTypeDesc index_type_desc;
+  const char* space;
+  int team_size;
+  int league_size;
+  int team_scratch_0;
+  int team_scratch_1;
+  int thread_scratch_0;
+  int thread_scratch_1;
+};
+
 ViewDumpResult dump_view_snapshot(
     const AllocationSnapshot& snapshot,
     const std::vector<unsigned char>& functor_data,
     const std::unordered_map<std::string, std::string>& metadata,
     const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
-                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc>& policy,
+                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc,
+                       kkf::TeamPolicyDesc>& policy,
     std::string_view phase, std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation);
 

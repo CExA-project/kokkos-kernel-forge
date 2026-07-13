@@ -1,0 +1,7 @@
+add_executable(team_policy main.cpp)
+target_link_libraries(team_policy PRIVATE kkf_warnings kkf_sanitizers Kokkos::kokkos kernel_extractor)
+
+add_executable(team_policy_replay replay_main.cpp)
+target_link_libraries(team_policy_replay PRIVATE kkf_warnings Kokkos::kokkos kernel_replayer)
+
+add_replay_test(team_policy FALSE)

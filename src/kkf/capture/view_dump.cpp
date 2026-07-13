@@ -162,6 +162,23 @@ void write_policy(hid_t policy_group, const MDRangePolicyDesc& policy) {
   write_dataset(policy_group, "tile", policy.tile);
 }
 
+void write_policy(hid_t policy_group, const TeamPolicyDesc& policy) {
+  write_string_attribute(policy_group, "type", "team");
+  write_int_attribute(policy_group, "index_type_size",
+                      policy.index_type_desc.size);
+  write_int_attribute(policy_group, "index_type_signed",
+                      policy.index_type_desc.is_signed);
+  write_string_attribute(policy_group, "space", policy.space);
+  write_int_attribute(policy_group, "team_size", policy.team_size);
+  write_int_attribute(policy_group, "league_size", policy.league_size);
+  write_int_attribute(policy_group, "team_scratch_0", policy.team_scratch_0);
+  write_int_attribute(policy_group, "team_scratch_1", policy.team_scratch_1);
+  write_int_attribute(policy_group, "thread_scratch_0",
+                      policy.thread_scratch_0);
+  write_int_attribute(policy_group, "thread_scratch_1",
+                      policy.thread_scratch_1);
+}
+
 void write_allocation_group(hid_t views_group,
                             const ActiveAllocation& allocation,
                             std::size_t index) {
@@ -200,7 +217,8 @@ ViewDumpResult dump_view_snapshot(
     const std::vector<unsigned char>& functor_data,
     const std::unordered_map<std::string, std::string>& metadata,
     const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
-                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc>& policy,
+                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc,
+                       kkf::TeamPolicyDesc>& policy,
     std::string_view phase, std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation) {
   ViewDumpResult result;

@@ -17,6 +17,12 @@ void (*register_mdrange_policy_function)(const char*, std::size_t, std::size_t,
                                          bool, const std::int64_t*,
                                          const std::int64_t*,
                                          const std::int64_t*)        = nullptr;
+void (*register_team_policy_function)(const char* space,
+                                      std::size_t index_type_size,
+                                      bool index_type_signed, int team_size,
+                                      int league_size, int team_scratch_0,
+                                      int team_scratch_1, int thread_scratch_0,
+                                      int thread_scratch_1)          = nullptr;
 bool (*next_invocation_will_dump_function)(const char*)              = nullptr;
 std::optional<bool> has_kernel_dump_tool = std::nullopt;
 
@@ -47,6 +53,8 @@ bool init_internal_functions_from_tool() {
                                  register_range_policy_function) &&
          load_function_from_tool("cexa_kernel_dump_register_mdrange_policy",
                                  register_mdrange_policy_function) &&
+         load_function_from_tool("cexa_kernel_dump_register_team_policy",
+                                 register_team_policy_function) &&
          load_function_from_tool("cexa_kernel_dump_next_invocation_will_dump",
                                  next_invocation_will_dump_function);
 }
@@ -67,6 +75,8 @@ void init_internal_functions() {
       register_mdrange_policy_function =
           [](const char*, std::size_t, std::size_t, bool, const std::int64_t*,
              const std::int64_t*, const std::int64_t*) {};
+      register_team_policy_function = [](const char*, std::size_t, bool, int,
+                                         int, int, int, int, int) {};
       next_invocation_will_dump_function = [](const char*) { return false; };
       has_kernel_dump_tool               = false;
     }
@@ -99,6 +109,18 @@ void register_mdrange_policy(const char* space, std::size_t rank,
   init_internal_functions();
   register_mdrange_policy_function(space, rank, index_type_size,
                                    index_type_signed, begin, end, tile);
+}
+
+void register_team_policy(const char* space, std::size_t index_type_size,
+                          bool index_type_signed, int team_size,
+                          int league_size,
+                          const scratch_description& team_scratch,
+                          const scratch_description& thread_scratch) {
+  init_internal_functions();
+  register_team_policy_function(space, index_type_size, index_type_signed,
+                                team_size, league_size, team_scratch.level0,
+                                team_scratch.level1, thread_scratch.level0,
+                                thread_scratch.level1);
 }
 
 bool next_invocation_will_dump(const char* kernel_name) {

@@ -111,8 +111,19 @@ struct MDRangePolicyDesc {
   mdrange_rank_var_t rank;
 };
 
+struct TeamPolicyDesc {
+  int team_size;
+  int league_size;
+  int team_scratch_0;
+  int team_scratch_1;
+  int thread_scratch_0;
+  int thread_scratch_1;
+  index_type_var_t index_type;
+  exec_space_var_t exec_space;
+};
+
 inline std::variant<std::monostate, ScalarPolicyDesc, RangePolicyDesc,
-                    MDRangePolicyDesc>
+                    MDRangePolicyDesc, TeamPolicyDesc>
     replay_policy;
 
 template <class ExecSpace, class IndexType>
@@ -137,6 +148,23 @@ auto get_mdrange_policy(const std::vector<std::int64_t>& start,
   return Kokkos::MDRangePolicy<ExecSpace, Kokkos::IndexType<IndexType>,
                                Kokkos::Rank<rank>>(start_arr, end_arr,
                                                    tile_arr);
+}
+
+template <class ExecSpace, class IndexType>
+auto get_team_policy(int team_size, int league_size, int team_scratch_0,
+                     int team_scratch_1, int thread_scratch_0,
+                     int thread_scratch_1) {
+  Kokkos::TeamPolicy<ExecSpace, Kokkos::IndexType<IndexType>> policy(
+      league_size, team_size);
+  // FIXME: querying the scratch size is not supported on all backends for some
+  // versions of Kokkos, we pass -1 to indicate that
+  if (team_scratch_0 != -1) {
+    policy.set_scratch_size(0, Kokkos::PerTeam(team_scratch_0),
+                            Kokkos::PerThread(thread_scratch_0));
+    policy.set_scratch_size(1, Kokkos::PerTeam(team_scratch_1),
+                            Kokkos::PerThread(thread_scratch_1));
+  }
+  return policy;
 }
 
 // NOTE: Since we resolve the rank using a variant, when calling visit, the
@@ -211,6 +239,16 @@ struct MDFunctorWrapper {
     }
     KOKKOS_ASSERT(false);
   }
+
+  template <class TeamMember>
+    requires Kokkos::is_team_handle_v<TeamMember>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(const TeamMember& team) const {
+    if constexpr (requires(Functor f, TeamMember t) { f(t); }) {
+      f(team);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
 };
 
 template <class Functor>
@@ -269,6 +307,21 @@ struct ParallelForVisitor {
           }
         },
         policy.rank, policy.index_type, policy.exec_space);
+  }
+
+  void operator()(const TeamPolicyDesc& policy) const {
+    std::visit(
+        [&]<class IndexType, class ExecSpaceTag>(IndexType, ExecSpaceTag) {
+          if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+            auto p =
+                impl::get_team_policy<typename ExecSpaceTag::space, IndexType>(
+                    policy.team_size, policy.league_size, policy.team_scratch_0,
+                    policy.team_scratch_1, policy.thread_scratch_0,
+                    policy.thread_scratch_1);
+            Kokkos::parallel_for(label, p, functor);
+          }
+        },
+        policy.index_type, policy.exec_space);
   }
 };
 }  // namespace impl
