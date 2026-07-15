@@ -18,7 +18,8 @@ void register_range_policy(const char* space, const char* schedule,
                            std::size_t index_type_size, bool index_type_signed,
                            std::uint64_t begin, std::uint64_t end);
 void register_mdrange_policy(const char* space, const char* schedule,
-                             std::size_t rank, std::size_t index_type_size,
+                             std::size_t rank, const char* outer_dir,
+                             const char* inner_dir, std::size_t index_type_size,
                              bool index_type_signed, const std::int64_t* begin,
                              const std::int64_t* end, const std::int64_t* tile);
 void register_team_policy(const char* space, const char* schedule,
@@ -41,6 +42,18 @@ constexpr std::uint64_t index_type_to_u64(IndexType N) {
   } else {
     return N;
   }
+}
+
+inline const char* iteration_pattern_to_string(Kokkos::Iterate direction) {
+  switch (direction) {
+    case Kokkos::Iterate::Left: return "left";
+    case Kokkos::Iterate::Right: return "right";
+    case Kokkos::Iterate::Default:
+      throw std::runtime_error(
+          "default iteration pattern should already be resolved at this point");
+  }
+  // We get a "control reaches end of non-void function" warning
+  return "";
 }
 
 template <class Schedule>
@@ -85,11 +98,13 @@ void register_bounds(const Kokkos::MDRangePolicy<Args...>& policy) {
 
   const auto [idx_type_size, idx_type_signed] =
       get_index_type_props<typename Policy::index_type>();
+  const char* outer_dir = iteration_pattern_to_string(Policy::outer_direction);
+  const char* inner_dir = iteration_pattern_to_string(Policy::inner_direction);
   register_mdrange_policy(policy.m_space.name(),
                           schedule_to_string<typename Policy::schedule_type>(),
-                          policy.rank, idx_type_size, idx_type_signed,
-                          policy.m_lower.data(), policy.m_upper.data(),
-                          policy.m_tile.data());
+                          policy.rank, outer_dir, inner_dir, idx_type_size,
+                          idx_type_signed, policy.m_lower.data(),
+                          policy.m_upper.data(), policy.m_tile.data());
 }
 
 template <class... Args>

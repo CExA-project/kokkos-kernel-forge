@@ -493,8 +493,32 @@ void read_policy_from_hdf5(hid_t file) {
       case 5: policy_rank = std::integral_constant<int, 5>{}; break;
       case 6: policy_rank = std::integral_constant<int, 6>{}; break;
       default:
-        throw std::runtime_error("unexpected mdrange policy rank " +
+        throw std::runtime_error("Unexpected mdrange policy rank " +
                                  std::to_string(rank));
+    }
+
+    Kokkos::Iterate outer_dir;
+    const std::string outer_dir_name =
+        get_hdf5_string_attribute(file, "policy", "outer_dir");
+    if (outer_dir_name == "left") {
+      outer_dir = Kokkos::Iterate::Left;
+    } else if (outer_dir_name == "right") {
+      outer_dir = Kokkos::Iterate::Right;
+    } else {
+      throw std::runtime_error("Unexpected iteration pattern '" +
+                               outer_dir_name + "'");
+    }
+
+    Kokkos::Iterate inner_dir;
+    const std::string inner_dir_name =
+        get_hdf5_string_attribute(file, "policy", "inner_dir");
+    if (inner_dir_name == "left") {
+      inner_dir = Kokkos::Iterate::Left;
+    } else if (inner_dir_name == "right") {
+      inner_dir = Kokkos::Iterate::Right;
+    } else {
+      throw std::runtime_error("Unexpected iteration pattern '" +
+                               inner_dir_name + "'");
     }
 
     std::vector<std::int64_t> begin =
@@ -503,8 +527,9 @@ void read_policy_from_hdf5(hid_t file) {
     std::vector<std::int64_t> tile =
         read_hdf5_int64_dataset(file, "policy/tile");
 
-    replay_policy = MDRangePolicyDesc{
-        begin, end, tile, index_type, schedule, exec_space, policy_rank};
+    replay_policy = MDRangePolicyDesc{begin,       end,       tile,
+                                      index_type,  schedule,  exec_space,
+                                      policy_rank, outer_dir, inner_dir};
   } else if (type == "team") {
     const int team_size = get_hdf5_int_attribute(file, "policy", "team_size");
     const int league_size =

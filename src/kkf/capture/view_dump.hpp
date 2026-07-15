@@ -41,6 +41,8 @@ struct MDRangePolicyDesc {
   const char* space;
   const char* schedule;
   std::size_t rank;
+  const char* outer_dir;
+  const char* inner_dir;
   std::vector<std::int64_t> begin;
   std::vector<std::int64_t> end;
   std::vector<std::int64_t> tile;

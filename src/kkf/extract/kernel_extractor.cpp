@@ -15,7 +15,8 @@ void (*register_range_policy_function)(const char*, const char*, std::size_t,
                                        bool, std::uint64_t,
                                        std::uint64_t)                = nullptr;
 void (*register_mdrange_policy_function)(const char*, const char*, std::size_t,
-                                         std::size_t, bool, const std::int64_t*,
+                                         const char*, const char*, std::size_t,
+                                         bool, const std::int64_t*,
                                          const std::int64_t*,
                                          const std::int64_t*)        = nullptr;
 void (*register_team_policy_function)(const char* space, const char*,
@@ -72,8 +73,9 @@ void init_internal_functions() {
                                           bool, std::uint64_t,
                                           std::uint64_t) {};
       register_mdrange_policy_function =
-          [](const char*, const char*, std::size_t, std::size_t, bool,
-             const std::int64_t*, const std::int64_t*, const std::int64_t*) {};
+          [](const char*, const char*, std::size_t, const char*, const char*,
+             std::size_t, bool, const std::int64_t*, const std::int64_t*,
+             const std::int64_t*) {};
       register_team_policy_function = [](const char*, const char*, std::size_t,
                                          bool, int, int, int, int, int, int) {};
       next_invocation_will_dump_function = [](const char*) { return false; };
@@ -101,13 +103,15 @@ void register_range_policy(const char* space, const char* schedule,
 }
 
 void register_mdrange_policy(const char* space, const char* schedule,
-                             std::size_t rank, std::size_t index_type_size,
+                             std::size_t rank, const char* outer_dir,
+                             const char* inner_dir, std::size_t index_type_size,
                              bool index_type_signed, const std::int64_t* begin,
                              const std::int64_t* end,
                              const std::int64_t* tile) {
   init_internal_functions();
-  register_mdrange_policy_function(space, schedule, rank, index_type_size,
-                                   index_type_signed, begin, end, tile);
+  register_mdrange_policy_function(space, schedule, rank, outer_dir, inner_dir,
+                                   index_type_size, index_type_signed, begin,
+                                   end, tile);
 }
 
 void register_team_policy(const char* space, const char* schedule,

@@ -115,6 +115,8 @@ struct MDRangePolicyDesc {
   schedule_var_t schedule;
   exec_space_var_t exec_space;
   mdrange_rank_var_t rank;
+  Kokkos::Iterate outer_iter_dir;
+  Kokkos::Iterate inner_iter_dir;
 };
 
 struct TeamPolicyDesc {
@@ -139,7 +141,8 @@ auto get_range_policy(const IndexType& start, const IndexType& end) {
                              Kokkos::IndexType<IndexType>>(start, end);
 }
 
-template <int rank, class ExecSpace, class Schedule, class IndexType>
+template <int rank, Kokkos::Iterate outer_dir, Kokkos::Iterate inner_dir,
+          class ExecSpace, class Schedule, class IndexType>
 auto get_mdrange_policy(const std::vector<std::int64_t>& start,
                         const std::vector<std::int64_t>& end,
                         const std::vector<std::int64_t>& tile) {
@@ -154,8 +157,8 @@ auto get_mdrange_policy(const std::vector<std::int64_t>& start,
   // TODO: handle iteration patterns
   return Kokkos::MDRangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
                                Kokkos::IndexType<IndexType>,
-                               Kokkos::Rank<rank>>(start_arr, end_arr,
-                                                   tile_arr);
+                               Kokkos::Rank<rank, outer_dir, inner_dir>>(
+      start_arr, end_arr, tile_arr);
 }
 
 template <class ExecSpace, class Schedule, class IndexType>
@@ -310,11 +313,39 @@ struct ParallelForVisitor {
             std::integral_constant<int, rank>, IndexType, Schedule,
             ExecSpaceTag) {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
-            auto p =
-                impl::get_mdrange_policy<rank, typename ExecSpaceTag::space,
-                                         Schedule, IndexType>(
+            using enum Kokkos::Iterate;
+            // We don't use a variant for the iteration pattern as adding
+            // variants to the visit call has a noticeable impact on compile
+            // times.
+            if (policy.outer_iter_dir == Right) {
+              if (policy.inner_iter_dir == Right) {
+                auto p = impl::get_mdrange_policy<rank, Right, Right,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
                     policy.begin, policy.end, policy.tile);
-            Kokkos::parallel_for(label, p, functor);
+                Kokkos::parallel_for(label, p, functor);
+              } else {
+                auto p = impl::get_mdrange_policy<rank, Right, Left,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              }
+            } else {  // Left
+              if (policy.inner_iter_dir == Right) {
+                auto p = impl::get_mdrange_policy<rank, Left, Right,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              } else {  // Left
+                auto p = impl::get_mdrange_policy<rank, Left, Left,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              }
+            }
           }
         },
         policy.rank, policy.index_type, policy.schedule, policy.exec_space);

@@ -256,12 +256,12 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
     const char* space, const char* schedule, std::size_t rank,
-    std::size_t index_type_size, bool index_type_signed,
-    const std::int64_t* begin, const std::int64_t* end,
+    const char* outer_dir, const char* inner_dir, std::size_t index_type_size,
+    bool index_type_signed, const std::int64_t* begin, const std::int64_t* end,
     const std::int64_t* tile) {
   policy = kkf::MDRangePolicyDesc(
-      {index_type_size, index_type_signed}, space, schedule, rank,
-      std::vector(begin, begin + rank), std::vector(end, end + rank),
+      {index_type_size, index_type_signed}, space, schedule, rank, outer_dir,
+      inner_dir, std::vector(begin, begin + rank), std::vector(end, end + rank),
       std::vector(tile, tile + rank));
 }
 

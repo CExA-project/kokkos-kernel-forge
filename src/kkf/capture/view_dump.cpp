@@ -159,6 +159,8 @@ void write_policy(hid_t policy_group, const MDRangePolicyDesc& policy) {
   write_string_attribute(policy_group, "space", policy.space);
   write_string_attribute(policy_group, "schedule", policy.schedule);
   write_int_attribute(policy_group, "rank", policy.rank);
+  write_string_attribute(policy_group, "outer_dir", policy.outer_dir);
+  write_string_attribute(policy_group, "inner_dir", policy.inner_dir);
   write_dataset(policy_group, "begin", policy.begin);
   write_dataset(policy_group, "end", policy.end);
   write_dataset(policy_group, "tile", policy.tile);
