@@ -15,9 +15,9 @@ int main(int argc, char* argv[]) {
   // Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
+  auto policy = Kokkos::TeamPolicy(1, 1);
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", Kokkos::TeamPolicy(1, 1),
-      KOKKOS_LAMBDA(TeamHandle auto team) {
+      "test_kernel", policy, KOKKOS_LAMBDA(decltype(policy)::member_type team) {
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team, 1024), [&](int i) {
           values(i) *= team.team_size() + team.league_size();
         });

@@ -2,10 +2,6 @@
 
 #include <kkf/extractor.hpp>
 
-// Kokkos::TeamHandle is only available from Kokkos 5.1.0
-template <class T>
-concept TeamHandle = Kokkos::is_team_handle_v<T>;
-
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
@@ -14,9 +10,9 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
+  auto policy = Kokkos::TeamPolicy(3, Kokkos::AUTO);
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", Kokkos::TeamPolicy(3, Kokkos::AUTO),
-      KOKKOS_LAMBDA(TeamHandle auto team) {
+      "test_kernel", policy, KOKKOS_LAMBDA(decltype(policy)::member_type team) {
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team, 1024), [&](int i) {
           values(i) *= team.team_size() + team.league_size();
         });
