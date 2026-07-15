@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", Kokkos::TeamPolicy(3, 10),
+      "test_kernel", Kokkos::TeamPolicy(3, Kokkos::AUTO),
       KOKKOS_LAMBDA(TeamHandle auto team) {
         Kokkos::parallel_for(Kokkos::TeamVectorRange(team, 1024), [&](int i) {
           values(i) *= team.team_size() + team.league_size();
