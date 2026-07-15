@@ -22,7 +22,7 @@ int main(int argc, char* argv[]) {
 
   // auto h_values =
   //     Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
-  // Kokkos::printf("values(5) = %d\n", h_values(1, 2, 3));
+  // Kokkos::printf("values(1, 2, 3) = %d\n", h_values(1, 2, 3));
 
   cexa::kernel_replayer::compare_views<int***>(
       "values", std::make_tuple(M, N, K),
