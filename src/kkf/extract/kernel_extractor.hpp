@@ -14,16 +14,16 @@ struct scratch_description {
 
 void copy_functor(const unsigned char* data, std::size_t size);
 void register_scalar_policy(std::uint64_t N);
-void register_range_policy(const char* space, std::size_t index_type_size,
-                           bool index_type_signed, std::uint64_t begin,
-                           std::uint64_t end);
-void register_mdrange_policy(const char* space, std::size_t rank,
-                             std::size_t index_type_size,
+void register_range_policy(const char* space, const char* schedule,
+                           std::size_t index_type_size, bool index_type_signed,
+                           std::uint64_t begin, std::uint64_t end);
+void register_mdrange_policy(const char* space, const char* schedule,
+                             std::size_t rank, std::size_t index_type_size,
                              bool index_type_signed, const std::int64_t* begin,
                              const std::int64_t* end, const std::int64_t* tile);
-void register_team_policy(const char* space, std::size_t index_type_size,
-                          bool index_type_signed, int team_size,
-                          int league_size,
+void register_team_policy(const char* space, const char* schedule,
+                          std::size_t index_type_size, bool index_type_signed,
+                          int team_size, int league_size,
                           const scratch_description& team_scratch,
                           const scratch_description& thread_scratch);
 bool next_invocation_will_dump(const char* kernel_name);
@@ -43,6 +43,20 @@ constexpr std::uint64_t index_type_to_u64(IndexType N) {
   }
 }
 
+template <class Schedule>
+const char* schedule_to_string() {
+  if constexpr (std::is_same_v<Schedule, Kokkos::Schedule<Kokkos::Static>>) {
+    return "static";
+  } else if constexpr (std::is_same_v<Schedule,
+                                      Kokkos::Schedule<Kokkos::Dynamic>>) {
+    return "dynamic";
+  } else {
+    // nvcc doesn't like static_assert(false, ...)
+    static_assert(!std::is_same_v<Schedule, Schedule>,
+                  "Invalid scheduling policy");
+  }
+}
+
 inline void register_bounds(const std::size_t upper_bound) {
   register_scalar_policy(static_cast<std::uint64_t>(upper_bound));
 }
@@ -54,8 +68,9 @@ void register_bounds(const Kokkos::RangePolicy<Args...>& policy) {
       get_index_type_props<typename Policy::index_type>();
   const std::uint64_t begin = index_type_to_u64(policy.begin());
   const std::uint64_t end   = index_type_to_u64(policy.end());
-  register_range_policy(Policy::execution_space::name(), idx_type_size,
-                        idx_type_signed, begin, end);
+  register_range_policy(Policy::execution_space::name(),
+                        schedule_to_string<typename Policy::schedule_type>(),
+                        idx_type_size, idx_type_signed, begin, end);
 }
 
 template <class... Args>
@@ -70,9 +85,11 @@ void register_bounds(const Kokkos::MDRangePolicy<Args...>& policy) {
 
   const auto [idx_type_size, idx_type_signed] =
       get_index_type_props<typename Policy::index_type>();
-  register_mdrange_policy(policy.m_space.name(), policy.rank, idx_type_size,
-                          idx_type_signed, policy.m_lower.data(),
-                          policy.m_upper.data(), policy.m_tile.data());
+  register_mdrange_policy(policy.m_space.name(),
+                          schedule_to_string<typename Policy::schedule_type>(),
+                          policy.rank, idx_type_size, idx_type_signed,
+                          policy.m_lower.data(), policy.m_upper.data(),
+                          policy.m_tile.data());
 }
 
 template <class... Args>
@@ -94,8 +111,9 @@ void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
   scratch_description team_scratch{-1, -1};
   scratch_description thread_scratch{-1, -1};
 #endif
-  register_team_policy(Policy::execution_space::name(), idx_type_size,
-                       idx_type_signed, policy.team_size(),
+  register_team_policy(Policy::execution_space::name(),
+                       schedule_to_string<typename Policy::schedule_type>(),
+                       idx_type_size, idx_type_signed, policy.team_size(),
                        policy.league_size(), team_scratch, thread_scratch);
 }
 

@@ -399,6 +399,17 @@ index_type_var_t get_policy_index_type_from_props(bool index_type_signed,
   }
 }
 
+schedule_var_t get_policy_schedule_from_name(const std::string& schedule) {
+  if (schedule == "static") {
+    return Kokkos::Static{};
+  } else if (schedule == "dynamic") {
+    return Kokkos::Dynamic{};
+  } else {
+    throw std::runtime_error("Unexpected schedule type '" + schedule +
+                             "' found in the dump");
+  }
+}
+
 exec_space_var_t get_policy_exec_space_from_name(const std::string& space) {
 #if defined(KOKKOS_ENABLE_SERIAL)
   if (space == "Serial") {
@@ -460,10 +471,15 @@ void read_policy_from_hdf5(hid_t file) {
   const exec_space_var_t exec_space =
       get_policy_exec_space_from_name(exec_space_name);
 
+  const std::string schedule_name =
+      get_hdf5_string_attribute(file, "policy", "schedule");
+  const schedule_var_t schedule = get_policy_schedule_from_name(schedule_name);
+
   if (type == "range") {
     std::uint64_t begin = get_hdf5_uint64_attribute(file, "policy", "begin");
     std::uint64_t end   = get_hdf5_uint64_attribute(file, "policy", "end");
-    replay_policy       = RangePolicyDesc{begin, end, index_type, exec_space};
+    replay_policy =
+        RangePolicyDesc{begin, end, index_type, schedule, exec_space};
   } else if (type == "mdrange") {
     mdrange_rank_var_t policy_rank;
     const int rank = get_hdf5_int_attribute(file, "policy", "rank");
@@ -487,8 +503,8 @@ void read_policy_from_hdf5(hid_t file) {
     std::vector<std::int64_t> tile =
         read_hdf5_int64_dataset(file, "policy/tile");
 
-    replay_policy = MDRangePolicyDesc{begin,      end,        tile,
-                                      index_type, exec_space, policy_rank};
+    replay_policy = MDRangePolicyDesc{
+        begin, end, tile, index_type, schedule, exec_space, policy_rank};
   } else if (type == "team") {
     const int team_size = get_hdf5_int_attribute(file, "policy", "team_size");
     const int league_size =
@@ -501,9 +517,10 @@ void read_policy_from_hdf5(hid_t file) {
         get_hdf5_int_attribute(file, "policy", "thread_scratch_0");
     const int thread_scratch_1 =
         get_hdf5_int_attribute(file, "policy", "thread_scratch_1");
-    replay_policy = TeamPolicyDesc{
-        team_size,        league_size,      team_scratch_0, team_scratch_1,
-        thread_scratch_0, thread_scratch_1, index_type,     exec_space};
+    replay_policy =
+        TeamPolicyDesc{team_size,      league_size,      team_scratch_0,
+                       team_scratch_1, thread_scratch_0, thread_scratch_1,
+                       index_type,     schedule,         exec_space};
   } else {
     throw std::runtime_error("Unknown policy type '" + type + "'");
   }

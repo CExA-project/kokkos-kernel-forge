@@ -31,6 +31,7 @@ struct ScalarPolicyDesc {
 struct RangePolicyDesc {
   IndexTypeDesc index_type_desc;
   const char* space;
+  const char* schedule;
   std::uint64_t begin;
   std::uint64_t end;
 };
@@ -38,6 +39,7 @@ struct RangePolicyDesc {
 struct MDRangePolicyDesc {
   IndexTypeDesc index_type_desc;
   const char* space;
+  const char* schedule;
   std::size_t rank;
   std::vector<std::int64_t> begin;
   std::vector<std::int64_t> end;
@@ -47,6 +49,7 @@ struct MDRangePolicyDesc {
 struct TeamPolicyDesc {
   IndexTypeDesc index_type_desc;
   const char* space;
+  const char* schedule;
   int team_size;
   int league_size;
   int team_scratch_0;

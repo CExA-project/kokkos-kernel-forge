@@ -45,6 +45,10 @@ using index_type_var_t =
     std::variant<std::int8_t, std::uint8_t, std::int16_t, std::uint16_t,
                  std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>;
 
+// Variant which is visited at runtime to handle the compile time scheduling
+// policy of execution policies
+using schedule_var_t = std::variant<Kokkos::Static, Kokkos::Dynamic>;
+
 // NOTE: We don't use execution space instances in the variant since we need to
 // initialize it before Kokkos is initalized
 template <class Space>
@@ -99,6 +103,7 @@ struct RangePolicyDesc {
   std::uint64_t begin;
   std::uint64_t end;
   index_type_var_t index_type;
+  schedule_var_t schedule;
   exec_space_var_t exec_space;
 };
 
@@ -107,6 +112,7 @@ struct MDRangePolicyDesc {
   std::vector<std::int64_t> end;
   std::vector<std::int64_t> tile;
   index_type_var_t index_type;
+  schedule_var_t schedule;
   exec_space_var_t exec_space;
   mdrange_rank_var_t rank;
 };
@@ -119,6 +125,7 @@ struct TeamPolicyDesc {
   int thread_scratch_0;
   int thread_scratch_1;
   index_type_var_t index_type;
+  schedule_var_t schedule;
   exec_space_var_t exec_space;
 };
 
@@ -126,13 +133,13 @@ inline std::variant<std::monostate, ScalarPolicyDesc, RangePolicyDesc,
                     MDRangePolicyDesc, TeamPolicyDesc>
     replay_policy;
 
-template <class ExecSpace, class IndexType>
+template <class ExecSpace, class Schedule, class IndexType>
 auto get_range_policy(const IndexType& start, const IndexType& end) {
-  return Kokkos::RangePolicy<ExecSpace, Kokkos::IndexType<IndexType>>(start,
-                                                                      end);
+  return Kokkos::RangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                             Kokkos::IndexType<IndexType>>(start, end);
 }
 
-template <int rank, class ExecSpace, class IndexType>
+template <int rank, class ExecSpace, class Schedule, class IndexType>
 auto get_mdrange_policy(const std::vector<std::int64_t>& start,
                         const std::vector<std::int64_t>& end,
                         const std::vector<std::int64_t>& tile) {
@@ -145,17 +152,19 @@ auto get_mdrange_policy(const std::vector<std::int64_t>& start,
     tile_arr[i]  = tile[i];
   }
   // TODO: handle iteration patterns
-  return Kokkos::MDRangePolicy<ExecSpace, Kokkos::IndexType<IndexType>,
+  return Kokkos::MDRangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                               Kokkos::IndexType<IndexType>,
                                Kokkos::Rank<rank>>(start_arr, end_arr,
                                                    tile_arr);
 }
 
-template <class ExecSpace, class IndexType>
+template <class ExecSpace, class Schedule, class IndexType>
 auto get_team_policy(int team_size, int league_size, int team_scratch_0,
                      int team_scratch_1, int thread_scratch_0,
                      int thread_scratch_1) {
-  Kokkos::TeamPolicy<ExecSpace, Kokkos::IndexType<IndexType>> policy(
-      league_size, team_size);
+  Kokkos::TeamPolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                     Kokkos::IndexType<IndexType>>
+      policy(league_size, team_size);
   // FIXME: querying the scratch size is not supported on all backends for some
   // versions of Kokkos, we pass -1 to indicate that
   if (team_scratch_0 != -1) {
@@ -274,7 +283,8 @@ struct ParallelForVisitor {
 
   void operator()(const RangePolicyDesc& policy) const {
     std::visit(
-        [&]<class IndexType, class ExecSpaceTag>(IndexType, ExecSpaceTag) {
+        [&]<class IndexType, class Schedule, class ExecSpaceTag>(
+            IndexType, Schedule, ExecSpaceTag) {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
             IndexType begin, end;
             if constexpr (std::is_signed_v<IndexType>) {
@@ -286,42 +296,44 @@ struct ParallelForVisitor {
             }
             Kokkos::parallel_for(
                 label,
-                impl::get_range_policy<typename ExecSpaceTag::space, IndexType>(
-                    begin, end),
+                impl::get_range_policy<typename ExecSpaceTag::space, Schedule,
+                                       IndexType>(begin, end),
                 functor);
           }
         },
-        policy.index_type, policy.exec_space);
+        policy.index_type, policy.schedule, policy.exec_space);
   }
 
   void operator()(const MDRangePolicyDesc& policy) const {
     std::visit(
-        [&]<int rank, class IndexType, class ExecSpaceTag>(
-            std::integral_constant<int, rank>, IndexType, ExecSpaceTag) {
+        [&]<int rank, class IndexType, class Schedule, class ExecSpaceTag>(
+            std::integral_constant<int, rank>, IndexType, Schedule,
+            ExecSpaceTag) {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
             auto p =
                 impl::get_mdrange_policy<rank, typename ExecSpaceTag::space,
-                                         IndexType>(policy.begin, policy.end,
-                                                    policy.tile);
+                                         Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
             Kokkos::parallel_for(label, p, functor);
           }
         },
-        policy.rank, policy.index_type, policy.exec_space);
+        policy.rank, policy.index_type, policy.schedule, policy.exec_space);
   }
 
   void operator()(const TeamPolicyDesc& policy) const {
     std::visit(
-        [&]<class IndexType, class ExecSpaceTag>(IndexType, ExecSpaceTag) {
+        [&]<class IndexType, class Schedule, class ExecSpaceTag>(
+            IndexType, Schedule, ExecSpaceTag) {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
-            auto p =
-                impl::get_team_policy<typename ExecSpaceTag::space, IndexType>(
-                    policy.team_size, policy.league_size, policy.team_scratch_0,
-                    policy.team_scratch_1, policy.thread_scratch_0,
-                    policy.thread_scratch_1);
+            auto p = impl::get_team_policy<typename ExecSpaceTag::space,
+                                           Schedule, IndexType>(
+                policy.team_size, policy.league_size, policy.team_scratch_0,
+                policy.team_scratch_1, policy.thread_scratch_0,
+                policy.thread_scratch_1);
             Kokkos::parallel_for(label, p, functor);
           }
         },
-        policy.index_type, policy.exec_space);
+        policy.index_type, policy.schedule, policy.exec_space);
   }
 };
 }  // namespace impl

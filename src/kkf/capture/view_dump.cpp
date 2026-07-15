@@ -145,6 +145,7 @@ void write_policy(hid_t policy_group, const RangePolicyDesc& policy) {
   write_int_attribute(policy_group, "index_type_signed",
                       policy.index_type_desc.is_signed);
   write_string_attribute(policy_group, "space", policy.space);
+  write_string_attribute(policy_group, "schedule", policy.schedule);
   write_uint64_attribute(policy_group, "begin", policy.begin);
   write_uint64_attribute(policy_group, "end", policy.end);
 }
@@ -156,6 +157,7 @@ void write_policy(hid_t policy_group, const MDRangePolicyDesc& policy) {
   write_int_attribute(policy_group, "index_type_signed",
                       policy.index_type_desc.is_signed);
   write_string_attribute(policy_group, "space", policy.space);
+  write_string_attribute(policy_group, "schedule", policy.schedule);
   write_int_attribute(policy_group, "rank", policy.rank);
   write_dataset(policy_group, "begin", policy.begin);
   write_dataset(policy_group, "end", policy.end);
@@ -169,6 +171,7 @@ void write_policy(hid_t policy_group, const TeamPolicyDesc& policy) {
   write_int_attribute(policy_group, "index_type_signed",
                       policy.index_type_desc.is_signed);
   write_string_attribute(policy_group, "space", policy.space);
+  write_string_attribute(policy_group, "schedule", policy.schedule);
   write_int_attribute(policy_group, "team_size", policy.team_size);
   write_int_attribute(policy_group, "league_size", policy.league_size);
   write_int_attribute(policy_group, "team_scratch_0", policy.team_scratch_0);

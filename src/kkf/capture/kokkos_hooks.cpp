@@ -248,29 +248,31 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_scalar_policy(
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
-    const char* space, std::size_t index_type_size, bool index_type_signed,
-    std::uint64_t begin, std::uint64_t end) {
+    const char* space, const char* schedule, std::size_t index_type_size,
+    bool index_type_signed, std::uint64_t begin, std::uint64_t end) {
   policy = kkf::RangePolicyDesc({index_type_size, index_type_signed}, space,
-                                begin, end);
+                                schedule, begin, end);
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
-    const char* space, std::size_t rank, std::size_t index_type_size,
-    bool index_type_signed, const std::int64_t* begin, const std::int64_t* end,
+    const char* space, const char* schedule, std::size_t rank,
+    std::size_t index_type_size, bool index_type_signed,
+    const std::int64_t* begin, const std::int64_t* end,
     const std::int64_t* tile) {
-  policy = kkf::MDRangePolicyDesc({index_type_size, index_type_signed}, space,
-                                  rank, std::vector(begin, begin + rank),
-                                  std::vector(end, end + rank),
-                                  std::vector(tile, tile + rank));
+  policy = kkf::MDRangePolicyDesc(
+      {index_type_size, index_type_signed}, space, schedule, rank,
+      std::vector(begin, begin + rank), std::vector(end, end + rank),
+      std::vector(tile, tile + rank));
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_team_policy(
-    const char* space, std::size_t index_type_size, bool index_type_signed,
-    int team_size, int league_size, int team_scratch_0, int team_scratch_1,
-    int thread_scratch_0, int thread_scratch_1) {
-  policy = kkf::TeamPolicyDesc(
-      {index_type_size, index_type_signed}, space, team_size, league_size,
-      team_scratch_0, team_scratch_1, thread_scratch_0, thread_scratch_1);
+    const char* space, const char* schedule, std::size_t index_type_size,
+    bool index_type_signed, int team_size, int league_size, int team_scratch_0,
+    int team_scratch_1, int thread_scratch_0, int thread_scratch_1) {
+  policy =
+      kkf::TeamPolicyDesc({index_type_size, index_type_signed}, space, schedule,
+                          team_size, league_size, team_scratch_0,
+                          team_scratch_1, thread_scratch_0, thread_scratch_1);
 }
 
 KOKKOS_HOOKS_EXPORT bool cexa_kernel_dump_next_invocation_will_dump(

@@ -11,18 +11,16 @@ namespace impl {
 void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
 void (*copy_functor_function)(const unsigned char*, std::size_t)     = nullptr;
 void (*register_scalar_policy_function)(std::uint64_t)               = nullptr;
-void (*register_range_policy_function)(const char*, std::size_t, bool,
-                                       std::uint64_t, std::uint64_t) = nullptr;
-void (*register_mdrange_policy_function)(const char*, std::size_t, std::size_t,
-                                         bool, const std::int64_t*,
+void (*register_range_policy_function)(const char*, const char*, std::size_t,
+                                       bool, std::uint64_t,
+                                       std::uint64_t)                = nullptr;
+void (*register_mdrange_policy_function)(const char*, const char*, std::size_t,
+                                         std::size_t, bool, const std::int64_t*,
                                          const std::int64_t*,
                                          const std::int64_t*)        = nullptr;
-void (*register_team_policy_function)(const char* space,
-                                      std::size_t index_type_size,
-                                      bool index_type_signed, int team_size,
-                                      int league_size, int team_scratch_0,
-                                      int team_scratch_1, int thread_scratch_0,
-                                      int thread_scratch_1)          = nullptr;
+void (*register_team_policy_function)(const char* space, const char*,
+                                      std::size_t, bool, int, int, int, int,
+                                      int, int)                      = nullptr;
 bool (*next_invocation_will_dump_function)(const char*)              = nullptr;
 std::optional<bool> has_kernel_dump_tool = std::nullopt;
 
@@ -70,13 +68,14 @@ void init_internal_functions() {
       add_metadata_function = [](const char*, const char*, std::size_t) {};
       copy_functor_function = [](const unsigned char*, std::size_t) {};
       register_scalar_policy_function = [](std::uint64_t) {};
-      register_range_policy_function  = [](const char*, std::size_t, bool,
-                                          std::uint64_t, std::uint64_t) {};
+      register_range_policy_function = [](const char*, const char*, std::size_t,
+                                          bool, std::uint64_t,
+                                          std::uint64_t) {};
       register_mdrange_policy_function =
-          [](const char*, std::size_t, std::size_t, bool, const std::int64_t*,
-             const std::int64_t*, const std::int64_t*) {};
-      register_team_policy_function = [](const char*, std::size_t, bool, int,
-                                         int, int, int, int, int) {};
+          [](const char*, const char*, std::size_t, std::size_t, bool,
+             const std::int64_t*, const std::int64_t*, const std::int64_t*) {};
+      register_team_policy_function = [](const char*, const char*, std::size_t,
+                                         bool, int, int, int, int, int, int) {};
       next_invocation_will_dump_function = [](const char*) { return false; };
       has_kernel_dump_tool               = false;
     }
@@ -93,34 +92,34 @@ void register_scalar_policy(std::uint64_t N) {
   register_scalar_policy_function(N);
 }
 
-void register_range_policy(const char* space, std::size_t index_type_size,
-                           bool index_type_signed, std::uint64_t begin,
-                           std::uint64_t end) {
+void register_range_policy(const char* space, const char* schedule,
+                           std::size_t index_type_size, bool index_type_signed,
+                           std::uint64_t begin, std::uint64_t end) {
   init_internal_functions();
-  register_range_policy_function(space, index_type_size, index_type_signed,
-                                 begin, end);
+  register_range_policy_function(space, schedule, index_type_size,
+                                 index_type_signed, begin, end);
 }
 
-void register_mdrange_policy(const char* space, std::size_t rank,
-                             std::size_t index_type_size,
+void register_mdrange_policy(const char* space, const char* schedule,
+                             std::size_t rank, std::size_t index_type_size,
                              bool index_type_signed, const std::int64_t* begin,
                              const std::int64_t* end,
                              const std::int64_t* tile) {
   init_internal_functions();
-  register_mdrange_policy_function(space, rank, index_type_size,
+  register_mdrange_policy_function(space, schedule, rank, index_type_size,
                                    index_type_signed, begin, end, tile);
 }
 
-void register_team_policy(const char* space, std::size_t index_type_size,
-                          bool index_type_signed, int team_size,
-                          int league_size,
+void register_team_policy(const char* space, const char* schedule,
+                          std::size_t index_type_size, bool index_type_signed,
+                          int team_size, int league_size,
                           const scratch_description& team_scratch,
                           const scratch_description& thread_scratch) {
   init_internal_functions();
-  register_team_policy_function(space, index_type_size, index_type_signed,
-                                team_size, league_size, team_scratch.level0,
-                                team_scratch.level1, thread_scratch.level0,
-                                thread_scratch.level1);
+  register_team_policy_function(space, schedule, index_type_size,
+                                index_type_signed, team_size, league_size,
+                                team_scratch.level0, team_scratch.level1,
+                                thread_scratch.level0, thread_scratch.level1);
 }
 
 bool next_invocation_will_dump(const char* kernel_name) {
