@@ -268,12 +268,12 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_team_policy(
     const char* space, const char* schedule, std::size_t index_type_size,
-    bool index_type_signed, int team_size, int league_size, int team_scratch_0,
-    int team_scratch_1, int thread_scratch_0, int thread_scratch_1,
-    int chunk_size) {
+    bool index_type_signed, int team_size, int league_size, int vector_length,
+    int team_scratch_0, int team_scratch_1, int thread_scratch_0,
+    int thread_scratch_1, int chunk_size) {
   policy = kkf::TeamPolicyDesc({index_type_size, index_type_signed}, space,
-                               schedule, team_size, league_size, team_scratch_0,
-                               team_scratch_1, thread_scratch_0,
+                               schedule, team_size, league_size, vector_length,
+                               team_scratch_0, team_scratch_1, thread_scratch_0,
                                thread_scratch_1, chunk_size);
 }
 

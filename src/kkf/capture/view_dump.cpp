@@ -106,7 +106,8 @@ auto Hdf5Datatype() {
   } else if constexpr (std::is_same_v<T, std::int64_t>) {
     return H5T_NATIVE_INT64;
   } else {
-    static_assert(false, "unsupported datatype");
+    // nvcc doesn't like static_assert(false, ...)
+    static_assert(!std::is_same_v<T, T>, "unsupported datatype");
   }
 }
 
@@ -177,6 +178,7 @@ void write_policy(hid_t policy_group, const TeamPolicyDesc& policy) {
   write_string_attribute(policy_group, "schedule", policy.schedule);
   write_int_attribute(policy_group, "team_size", policy.team_size);
   write_int_attribute(policy_group, "league_size", policy.league_size);
+  write_int_attribute(policy_group, "vector_length", policy.vector_length);
   write_int_attribute(policy_group, "team_scratch_0", policy.team_scratch_0);
   write_int_attribute(policy_group, "team_scratch_1", policy.team_scratch_1);
   write_int_attribute(policy_group, "thread_scratch_0",

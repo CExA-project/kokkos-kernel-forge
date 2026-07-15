@@ -123,6 +123,7 @@ struct MDRangePolicyDesc {
 struct TeamPolicyDesc {
   int team_size;
   int league_size;
+  int vector_length;
   int team_scratch_0;
   int team_scratch_1;
   int thread_scratch_0;
@@ -166,12 +167,26 @@ auto get_mdrange_policy(const std::vector<std::int64_t>& start,
 }
 
 template <class ExecSpace, class Schedule, class IndexType>
-auto get_team_policy(int team_size, int league_size, int team_scratch_0,
-                     int team_scratch_1, int thread_scratch_0,
-                     int thread_scratch_1, int chunk_size) {
-  Kokkos::TeamPolicy<ExecSpace, Kokkos::Schedule<Schedule>,
-                     Kokkos::IndexType<IndexType>>
-      policy(league_size, team_size);
+auto get_team_policy(int team_size, int league_size, int vector_length,
+                     int team_scratch_0, int team_scratch_1,
+                     int thread_scratch_0, int thread_scratch_1,
+                     int chunk_size) {
+  using Policy = Kokkos::TeamPolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                                    Kokkos::IndexType<IndexType>>;
+  Policy policy;
+  if (team_size < 0) {
+    if (vector_length < 0) {
+      policy = Policy(league_size, Kokkos::AUTO, Kokkos::AUTO);
+    } else {
+      policy = Policy(league_size, Kokkos::AUTO, vector_length);
+    }
+  } else {
+    if (vector_length < 0) {
+      policy = Policy(league_size, team_size, Kokkos::AUTO);
+    } else {
+      policy = Policy(league_size, team_size, vector_length);
+    }
+  }
   // FIXME: querying the scratch size is not supported on all backends for some
   // versions of Kokkos, we pass -1 to indicate that
   if (team_scratch_0 != -1) {
@@ -364,9 +379,10 @@ struct ParallelForVisitor {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
             auto p = impl::get_team_policy<typename ExecSpaceTag::space,
                                            Schedule, IndexType>(
-                policy.team_size, policy.league_size, policy.team_scratch_0,
-                policy.team_scratch_1, policy.thread_scratch_0,
-                policy.thread_scratch_1, policy.chunk_size);
+                policy.team_size, policy.league_size, policy.vector_length,
+                policy.team_scratch_0, policy.team_scratch_1,
+                policy.thread_scratch_0, policy.thread_scratch_1,
+                policy.chunk_size);
             Kokkos::parallel_for(label, p, functor);
           }
         },

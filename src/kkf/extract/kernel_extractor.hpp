@@ -25,7 +25,7 @@ void register_mdrange_policy(const char* space, const char* schedule,
                              const std::int64_t* end, const std::int64_t* tile);
 void register_team_policy(const char* space, const char* schedule,
                           std::size_t index_type_size, bool index_type_signed,
-                          int team_size, int league_size,
+                          int team_size, int league_size, int vector_length,
                           const scratch_description& team_scratch,
                           const scratch_description& thread_scratch,
                           int chunk_size);
@@ -129,11 +129,14 @@ void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
   scratch_description team_scratch{-1, -1};
   scratch_description thread_scratch{-1, -1};
 #endif
+  int team_size = policy.impl_auto_team_size() ? -1 : policy.team_size();
+  int vector_length =
+      policy.impl_auto_vector_length() ? -1 : policy.impl_vector_length();
   register_team_policy(Policy::execution_space::name(),
                        schedule_to_string<typename Policy::schedule_type>(),
-                       idx_type_size, idx_type_signed, policy.team_size(),
-                       policy.league_size(), team_scratch, thread_scratch,
-                       policy.chunk_size());
+                       idx_type_size, idx_type_signed, team_size,
+                       policy.league_size(), vector_length, team_scratch,
+                       thread_scratch, policy.chunk_size());
 }
 
 }  // namespace impl

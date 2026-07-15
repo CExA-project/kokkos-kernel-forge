@@ -536,6 +536,8 @@ void read_policy_from_hdf5(hid_t file) {
     const int team_size = get_hdf5_int_attribute(file, "policy", "team_size");
     const int league_size =
         get_hdf5_int_attribute(file, "policy", "league_size");
+    const int vector_length =
+        get_hdf5_int_attribute(file, "policy", "vector_length");
     const int team_scratch_0 =
         get_hdf5_int_attribute(file, "policy", "team_scratch_0");
     const int team_scratch_1 =
@@ -546,9 +548,9 @@ void read_policy_from_hdf5(hid_t file) {
         get_hdf5_int_attribute(file, "policy", "thread_scratch_1");
     const int chunk_size = get_hdf5_int_attribute(file, "policy", "chunk_size");
     replay_policy        = TeamPolicyDesc{
-        team_size,        league_size,      team_scratch_0, team_scratch_1,
-        thread_scratch_0, thread_scratch_1, chunk_size,     index_type,
-        schedule,         exec_space};
+        team_size,      league_size,      vector_length,    team_scratch_0,
+        team_scratch_1, thread_scratch_0, thread_scratch_1, chunk_size,
+        index_type,     schedule,         exec_space};
   } else {
     throw std::runtime_error("Unknown policy type '" + type + "'");
   }

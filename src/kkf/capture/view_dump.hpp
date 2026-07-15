@@ -55,6 +55,7 @@ struct TeamPolicyDesc {
   const char* schedule;
   int team_size;
   int league_size;
+  int vector_length;
   int team_scratch_0;
   int team_scratch_1;
   int thread_scratch_0;

@@ -21,7 +21,7 @@ void (*register_mdrange_policy_function)(const char*, const char*, std::size_t,
                                          const std::int64_t*)        = nullptr;
 void (*register_team_policy_function)(const char* space, const char*,
                                       std::size_t, bool, int, int, int, int,
-                                      int, int, int)                 = nullptr;
+                                      int, int, int, int)            = nullptr;
 bool (*next_invocation_will_dump_function)(const char*)              = nullptr;
 std::optional<bool> has_kernel_dump_tool = std::nullopt;
 
@@ -78,7 +78,7 @@ void init_internal_functions() {
              const std::int64_t*) {};
       register_team_policy_function = [](const char*, const char*, std::size_t,
                                          bool, int, int, int, int, int, int,
-                                         int) {};
+                                         int, int) {};
       next_invocation_will_dump_function = [](const char*) { return false; };
       has_kernel_dump_tool               = false;
     }
@@ -118,14 +118,14 @@ void register_mdrange_policy(const char* space, const char* schedule,
 
 void register_team_policy(const char* space, const char* schedule,
                           std::size_t index_type_size, bool index_type_signed,
-                          int team_size, int league_size,
+                          int team_size, int league_size, int vector_length,
                           const scratch_description& team_scratch,
                           const scratch_description& thread_scratch,
                           int chunk_size) {
   init_internal_functions();
   register_team_policy_function(
       space, schedule, index_type_size, index_type_signed, team_size,
-      league_size, team_scratch.level0, team_scratch.level1,
+      league_size, vector_length, team_scratch.level0, team_scratch.level1,
       thread_scratch.level0, thread_scratch.level1, chunk_size);
 }
 
