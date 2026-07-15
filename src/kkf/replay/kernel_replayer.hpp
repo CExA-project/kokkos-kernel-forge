@@ -102,6 +102,7 @@ struct ScalarPolicyDesc {
 struct RangePolicyDesc {
   std::uint64_t begin;
   std::uint64_t end;
+  int chunk_size;
   index_type_var_t index_type;
   schedule_var_t schedule;
   exec_space_var_t exec_space;
@@ -126,6 +127,7 @@ struct TeamPolicyDesc {
   int team_scratch_1;
   int thread_scratch_0;
   int thread_scratch_1;
+  int chunk_size;
   index_type_var_t index_type;
   schedule_var_t schedule;
   exec_space_var_t exec_space;
@@ -136,9 +138,11 @@ inline std::variant<std::monostate, ScalarPolicyDesc, RangePolicyDesc,
     replay_policy;
 
 template <class ExecSpace, class Schedule, class IndexType>
-auto get_range_policy(const IndexType& start, const IndexType& end) {
+auto get_range_policy(const IndexType& start, const IndexType& end,
+                      int chunk_size) {
   return Kokkos::RangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
-                             Kokkos::IndexType<IndexType>>(start, end);
+                             Kokkos::IndexType<IndexType>>(
+      start, end, Kokkos::ChunkSize(chunk_size));
 }
 
 template <int rank, Kokkos::Iterate outer_dir, Kokkos::Iterate inner_dir,
@@ -164,7 +168,7 @@ auto get_mdrange_policy(const std::vector<std::int64_t>& start,
 template <class ExecSpace, class Schedule, class IndexType>
 auto get_team_policy(int team_size, int league_size, int team_scratch_0,
                      int team_scratch_1, int thread_scratch_0,
-                     int thread_scratch_1) {
+                     int thread_scratch_1, int chunk_size) {
   Kokkos::TeamPolicy<ExecSpace, Kokkos::Schedule<Schedule>,
                      Kokkos::IndexType<IndexType>>
       policy(league_size, team_size);
@@ -176,6 +180,7 @@ auto get_team_policy(int team_size, int league_size, int team_scratch_0,
     policy.set_scratch_size(1, Kokkos::PerTeam(team_scratch_1),
                             Kokkos::PerThread(thread_scratch_1));
   }
+  policy.set_chunk_size(chunk_size);
   return policy;
 }
 
@@ -300,7 +305,8 @@ struct ParallelForVisitor {
             Kokkos::parallel_for(
                 label,
                 impl::get_range_policy<typename ExecSpaceTag::space, Schedule,
-                                       IndexType>(begin, end),
+                                       IndexType>(begin, end,
+                                                  policy.chunk_size),
                 functor);
           }
         },
@@ -360,7 +366,7 @@ struct ParallelForVisitor {
                                            Schedule, IndexType>(
                 policy.team_size, policy.league_size, policy.team_scratch_0,
                 policy.team_scratch_1, policy.thread_scratch_0,
-                policy.thread_scratch_1);
+                policy.thread_scratch_1, policy.chunk_size);
             Kokkos::parallel_for(label, p, functor);
           }
         },

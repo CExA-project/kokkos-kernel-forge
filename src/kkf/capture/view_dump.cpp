@@ -148,6 +148,7 @@ void write_policy(hid_t policy_group, const RangePolicyDesc& policy) {
   write_string_attribute(policy_group, "schedule", policy.schedule);
   write_uint64_attribute(policy_group, "begin", policy.begin);
   write_uint64_attribute(policy_group, "end", policy.end);
+  write_int_attribute(policy_group, "chunk_size", policy.chunk_size);
 }
 
 void write_policy(hid_t policy_group, const MDRangePolicyDesc& policy) {
@@ -182,6 +183,7 @@ void write_policy(hid_t policy_group, const TeamPolicyDesc& policy) {
                       policy.thread_scratch_0);
   write_int_attribute(policy_group, "thread_scratch_1",
                       policy.thread_scratch_1);
+  write_int_attribute(policy_group, "chunk_size", policy.chunk_size);
 }
 
 void write_allocation_group(hid_t views_group,

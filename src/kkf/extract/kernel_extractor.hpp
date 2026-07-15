@@ -16,7 +16,8 @@ void copy_functor(const unsigned char* data, std::size_t size);
 void register_scalar_policy(std::uint64_t N);
 void register_range_policy(const char* space, const char* schedule,
                            std::size_t index_type_size, bool index_type_signed,
-                           std::uint64_t begin, std::uint64_t end);
+                           std::uint64_t begin, std::uint64_t end,
+                           int chunk_size);
 void register_mdrange_policy(const char* space, const char* schedule,
                              std::size_t rank, const char* outer_dir,
                              const char* inner_dir, std::size_t index_type_size,
@@ -26,7 +27,8 @@ void register_team_policy(const char* space, const char* schedule,
                           std::size_t index_type_size, bool index_type_signed,
                           int team_size, int league_size,
                           const scratch_description& team_scratch,
-                          const scratch_description& thread_scratch);
+                          const scratch_description& thread_scratch,
+                          int chunk_size);
 bool next_invocation_will_dump(const char* kernel_name);
 
 template <std::integral IndexType>
@@ -83,7 +85,8 @@ void register_bounds(const Kokkos::RangePolicy<Args...>& policy) {
   const std::uint64_t end   = index_type_to_u64(policy.end());
   register_range_policy(Policy::execution_space::name(),
                         schedule_to_string<typename Policy::schedule_type>(),
-                        idx_type_size, idx_type_signed, begin, end);
+                        idx_type_size, idx_type_signed, begin, end,
+                        policy.chunk_size());
 }
 
 template <class... Args>
@@ -129,7 +132,8 @@ void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
   register_team_policy(Policy::execution_space::name(),
                        schedule_to_string<typename Policy::schedule_type>(),
                        idx_type_size, idx_type_signed, policy.team_size(),
-                       policy.league_size(), team_scratch, thread_scratch);
+                       policy.league_size(), team_scratch, thread_scratch,
+                       policy.chunk_size());
 }
 
 }  // namespace impl

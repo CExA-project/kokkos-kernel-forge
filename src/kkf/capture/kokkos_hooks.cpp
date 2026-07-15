@@ -249,9 +249,10 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_scalar_policy(
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
     const char* space, const char* schedule, std::size_t index_type_size,
-    bool index_type_signed, std::uint64_t begin, std::uint64_t end) {
+    bool index_type_signed, std::uint64_t begin, std::uint64_t end,
+    int chunk_size) {
   policy = kkf::RangePolicyDesc({index_type_size, index_type_signed}, space,
-                                schedule, begin, end);
+                                schedule, begin, end, chunk_size);
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
@@ -268,11 +269,12 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_team_policy(
     const char* space, const char* schedule, std::size_t index_type_size,
     bool index_type_signed, int team_size, int league_size, int team_scratch_0,
-    int team_scratch_1, int thread_scratch_0, int thread_scratch_1) {
-  policy =
-      kkf::TeamPolicyDesc({index_type_size, index_type_signed}, space, schedule,
-                          team_size, league_size, team_scratch_0,
-                          team_scratch_1, thread_scratch_0, thread_scratch_1);
+    int team_scratch_1, int thread_scratch_0, int thread_scratch_1,
+    int chunk_size) {
+  policy = kkf::TeamPolicyDesc({index_type_size, index_type_signed}, space,
+                               schedule, team_size, league_size, team_scratch_0,
+                               team_scratch_1, thread_scratch_0,
+                               thread_scratch_1, chunk_size);
 }
 
 KOKKOS_HOOKS_EXPORT bool cexa_kernel_dump_next_invocation_will_dump(

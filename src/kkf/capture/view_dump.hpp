@@ -34,6 +34,7 @@ struct RangePolicyDesc {
   const char* schedule;
   std::uint64_t begin;
   std::uint64_t end;
+  int chunk_size;
 };
 
 struct MDRangePolicyDesc {
@@ -58,6 +59,7 @@ struct TeamPolicyDesc {
   int team_scratch_1;
   int thread_scratch_0;
   int thread_scratch_1;
+  int chunk_size;
 };
 
 ViewDumpResult dump_view_snapshot(
