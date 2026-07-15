@@ -45,6 +45,7 @@ compile-time and runtime attributes
 ```
 type              # the type of policy stored, or "none" if no policy was recorded
 space             # the execution space's name (for every type except scalar)
+schedule          # the scheduling policy
 index_type_size   # size in bytes of the policy's index_type (for every type except scalar)
 index_type_signed # whether the policy's index_type is signed (for every type except scalar)
 
@@ -56,10 +57,12 @@ begin # the starting index
 end   # the end index
 
 # type == "mdrange"
-rank  # the policy's rank
-begin # int64_t dataset storing the starting indices
-end   # int64_t dataset storing the end indices
-tile  # int64_t dataset storing the tile dimensions
+rank      # the policy's rank
+outer_dir # the policy's outer iteration direction
+inner_dir # the policy's inner iteration direction
+begin     # int64_t dataset storing the starting indices
+end       # int64_t dataset storing the end indices
+tile      # int64_t dataset storing the tile dimensions
 
 # type == "team"
 team_size       # number of threads per team
