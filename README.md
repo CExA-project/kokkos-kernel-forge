@@ -70,7 +70,7 @@ int main(int argc, char* argv[]) {
 
 The program has to be linked with `cexa::kernel_extractor`, it then has to be
 executed with the following environment variables in order to extract the first
-invokation of the kernel named "scale"
+invocation of the kernel named "scale"
 ```sh
 KOKKOS_TOOLS_LIBS=/path/to/libkkf.so \
 KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=scale
@@ -175,4 +175,6 @@ Kokkos::View<int*> result_values(initial_values_ptr, 1024);
   - For `RangePolicy`: `KOKKOS_LABMDA(std::integral auto i) { ... }`
   - For `TeamPolicy`: `KOKKOS_LAMBDA(Kokkos::TeamHandle auto team) { ... }`
 - The `LaunchBounds` and `WorkTag` template arguments for execution policies
-  cannot be automatically extracted and restored
+  cannot be automatically restored in the replayed program
+- Currently, the scratch memory parameters for `TeamPolicy` cannot be
+  automatically restored in the replayed program

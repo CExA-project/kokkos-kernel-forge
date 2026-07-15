@@ -53,8 +53,9 @@ index_type_signed # whether the policy's index_type is signed (for every type ex
 end # the end index
 
 # type == "range"
-begin # the starting index
-end   # the end index
+begin      # the starting index
+end        # the end index
+chunk_size # the chunk size parameter
 
 # type == "mdrange"
 rank      # the policy's rank
@@ -71,4 +72,5 @@ team_scratch0   # amount of level 0 scratch memory per team, in bytes
 team_scratch1   # amount of level 1 scratch memory per team, in bytes
 thread_scratch0 # amount of level 0 scratch memory per thread, in bytes
 thread_scratch1 # amount of level 1 scratch memory per thread, in bytes
+chunk_size      # the chunk size parameter
 ```
