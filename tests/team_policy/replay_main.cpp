@@ -2,10 +2,6 @@
 
 #include <kkf/replayer.hpp>
 
-// Kokkos::TeamHandle is only available from Kokkos 5.1.0
-template <class T>
-concept TeamHandle = Kokkos::is_team_handle_v<T>;
-
 int main(int argc, char* argv[]) {
   cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
@@ -18,9 +14,10 @@ int main(int argc, char* argv[]) {
   auto policy = Kokkos::TeamPolicy(1, 1);
   cexa::kernel_replayer::parallel_for(
       "test_kernel", policy, KOKKOS_LAMBDA(decltype(policy)::member_type team) {
-        Kokkos::parallel_for(Kokkos::TeamVectorRange(team, 1024), [&](int i) {
-          values(i) *= team.team_size() + team.league_size();
-        });
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, team.league_rank() * 256,
+                                    (team.league_rank() + 1) * 256),
+            [&](int i) { values(i) *= team.team_size() + team.league_size(); });
       });
   Kokkos::fence();
 
