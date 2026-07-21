@@ -147,9 +147,10 @@ struct TeamPolicyDesc {
   exec_space_var_t exec_space;
 };
 
-inline std::variant<std::monostate, ScalarPolicyDesc, RangePolicyDesc,
-                    MDRangePolicyDesc, TeamPolicyDesc>
-    replay_policy;
+using policy_var_t =
+    std::variant<std::monostate, ScalarPolicyDesc, RangePolicyDesc,
+                 MDRangePolicyDesc, TeamPolicyDesc>;
+inline std::unique_ptr<policy_var_t> replay_policy;
 
 template <class ExecSpace, class Schedule, class IndexType>
 auto get_range_policy(const IndexType& start, const IndexType& end,
@@ -571,7 +572,7 @@ void parallel_for(const std::string& label, [[maybe_unused]] const Policy& p,
     Kokkos::parallel_for(label, p.policy, replay_functor(functor));
   } else {
     std::visit(impl::ParallelForVisitor{label, replay_functor(functor)},
-               impl::replay_policy);
+               *impl::replay_policy);
   }
 }
 }  // namespace cexa::kernel_replayer

@@ -374,16 +374,15 @@ std::uint64_t get_hdf5_uint64_attribute(hid_t group, const char* name,
   return attribute;
 }
 
+template <MemorySpaceType target_memory_space>
 herr_t get_hdf5_dataset_alloc_info(hid_t group, const char* name,
-                                   const H5L_info_t*, void* allocation_sets) {
-  std::string label = get_hdf5_string_attribute(group, name, "label");
+                                   const H5L_info_t*, void* allocation_set) {
   std::string space = get_hdf5_string_attribute(group, name, "space");
   char* address     = reinterpret_cast<char*>(std::stoull(
       get_hdf5_string_attribute(group, name, "p_data"), nullptr, 16));
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
-  if (memory_space == MemorySpaceType::HOST &&
-      label == "kernel_replayer_functor") {
+  if (memory_space != target_memory_space) {
     return 0;
   }
 
@@ -405,14 +404,10 @@ herr_t get_hdf5_dataset_alloc_info(hid_t group, const char* name,
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
 
   auto allocations = reinterpret_cast<std::set<std::pair<char*, std::size_t>>*>(
-      allocation_sets);
+      allocation_set);
   std::pair<char*, std::size_t> allocation_info =
       get_allocation_address(address, buffer_size, memory_space);
-  if (memory_space == MemorySpaceType::HOST) {
-    allocations[0].insert(allocation_info);
-  } else {
-    allocations[1].insert(allocation_info);
-  }
+  allocations->insert(allocation_info);
 
   return 0;
 }
@@ -576,12 +571,14 @@ exec_space_var_t get_policy_exec_space_from_name(const std::string& space) {
 void read_policy_from_hdf5(hid_t file) {
   std::string type = get_hdf5_string_attribute(file, "policy", "type");
 
+  replay_policy = std::make_unique<policy_var_t>();
+
   if (type == "none") {
     return;
   }
 
   if (type == "scalar") {
-    replay_policy =
+    *replay_policy =
         ScalarPolicyDesc{get_hdf5_uint64_attribute(file, "policy", "end")};
     return;
   }
@@ -608,8 +605,8 @@ void read_policy_from_hdf5(hid_t file) {
         get_hdf5_uint64_attribute(file, "policy", "begin");
     const std::uint64_t end = get_hdf5_uint64_attribute(file, "policy", "end");
     const int chunk_size = get_hdf5_int_attribute(file, "policy", "chunk_size");
-    replay_policy        = RangePolicyDesc{begin,      end,      chunk_size,
-                                    index_type, schedule, exec_space};
+    *replay_policy       = RangePolicyDesc{begin,      end,      chunk_size,
+                                     index_type, schedule, exec_space};
   } else if (type == "mdrange") {
     mdrange_rank_var_t policy_rank;
     const int rank = get_hdf5_int_attribute(file, "policy", "rank");
@@ -657,9 +654,9 @@ void read_policy_from_hdf5(hid_t file) {
     std::vector<std::int64_t> tile =
         read_hdf5_int64_dataset(file, "policy/tile");
 
-    replay_policy = MDRangePolicyDesc{begin,       end,       tile,
-                                      index_type,  schedule,  exec_space,
-                                      policy_rank, outer_dir, inner_dir};
+    *replay_policy = MDRangePolicyDesc{begin,       end,       tile,
+                                       index_type,  schedule,  exec_space,
+                                       policy_rank, outer_dir, inner_dir};
   } else if (type == "team") {
     const int team_size = get_hdf5_int_attribute(file, "policy", "team_size");
     const int league_size =
@@ -675,7 +672,7 @@ void read_policy_from_hdf5(hid_t file) {
     const int thread_scratch_1 =
         get_hdf5_int_attribute(file, "policy", "thread_scratch_1");
     const int chunk_size = get_hdf5_int_attribute(file, "policy", "chunk_size");
-    replay_policy        = TeamPolicyDesc{
+    *replay_policy       = TeamPolicyDesc{
         team_size,      league_size,      vector_length,    team_scratch_0,
         team_scratch_1, thread_scratch_0, thread_scratch_1, chunk_size,
         index_type,     schedule,         exec_space};
@@ -712,8 +709,6 @@ std::vector<std::pair<char*, std::size_t>> compute_allocations(
 }  // namespace impl
 
 ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
-  device_init();
-
   std::string_view hdf5_filename =
       find_flag_argument(argc, argv, "--kernel-replayer-dump");
   if (hdf5_filename.data() == nullptr) {
@@ -724,18 +719,33 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   kkf::hdf5::ScopedHandle file(
       CHECK_HDF5_ID(H5Fopen(hdf5_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
       H5Fclose);
-  std::set<std::pair<char*, std::size_t>> allocation_sets[2];
+
+  std::set<std::pair<char*, std::size_t>> host_allocation_locs;
 
   hsize_t idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
       file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-      impl::get_hdf5_dataset_alloc_info, allocation_sets, H5P_DEFAULT));
+      impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::HOST>,
+      &host_allocation_locs, H5P_DEFAULT));
 
-  for (auto [address, size] : impl::compute_allocations(allocation_sets[0])) {
+  for (auto [address, size] : impl::compute_allocations(host_allocation_locs)) {
     allocate(impl::MemorySpaceType::HOST, address, size);
   }
 
-  for (auto [address, size] : impl::compute_allocations(allocation_sets[1])) {
+  // initializing the device driver apis might allocate heap memory, that's why
+  // we do it after doing the host allocations
+  device_init();
+
+  std::set<std::pair<char*, std::size_t>> device_allocation_locs;
+
+  idx = 0;
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::DEVICE>,
+      &device_allocation_locs, H5P_DEFAULT));
+
+  for (auto [address, size] :
+       impl::compute_allocations(device_allocation_locs)) {
     allocate(impl::MemorySpaceType::DEVICE, address, size);
   }
 
