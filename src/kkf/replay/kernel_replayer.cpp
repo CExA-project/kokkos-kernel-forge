@@ -17,6 +17,136 @@
 #include "allocation.hpp"
 #include "memory_space_type.hpp"
 
+// Extended lambdas on nvcc are implemented with structs storing a copy of the
+// captured variables and a pointer to a heap allocated buffer containing the
+// original lambda object. In order to replay an extended lambda we need to copy
+// both the captured variables (used for the device version) and the lambda
+// buffer (used for the host version).
+//
+// The main challenge is that we cannot access this buffer or its size from an
+// extended lambda object. For accessing the buffer, we assume that the pointer
+// to the buffer will be the last data member of the extended lambda, and just
+// compute it as `ptr = (&lambda + sizeof(lambda)) - sizeof(void*)`. For the
+// size, we rely on the fact that this buffer is allocated using `new` and
+// overload the default `operator new` to record all allocation sizes in order
+// to know the size of the original lambda.
+//
+// Another alternative would have been to use the gcc/clang builtins
+// `__builtin_[dynamic_]object_size()` which can give the size of an object
+// based on a pointer to said object, but these builtins only work with
+// optimizations enabled (in my testing, it only worked with -O3).
+//
+// Note that this is fragile as it relies on implementation details, but we
+// found no other alternative to get the information we need out of an extended
+// lambda.
+#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
+template <typename T>
+class MallocAllocator {
+ public:
+  using value_type = T;
+
+  MallocAllocator() = default;
+
+  template <typename U>
+  constexpr MallocAllocator(const MallocAllocator<U>&) noexcept {}
+
+  T* allocate(std::size_t n) {
+    if (n > std::allocator_traits<MallocAllocator>::max_size(*this)) {
+      throw std::bad_alloc();
+    }
+    return static_cast<T*>(std::malloc(n * sizeof(T)));
+  }
+
+  void deallocate(T* p, std::size_t) noexcept { std::free(p); }
+};
+
+// We use a custom allocator in the map, as the default one would call our
+// overloaded operator new, which would insert into the map, leading to a call
+// to new, inserting into the map, ... until a segfault happens
+using allocations_map_t =
+    std::unordered_map<void*, std::size_t, std::hash<void*>,
+                       std::equal_to<void*>,
+                       MallocAllocator<std::pair<void* const, std::size_t>>>;
+
+static allocations_map_t* system_allocations = nullptr;
+static std::mutex system_allocations_mutex;
+
+// nvcc considers these operators as host device and complains that we use host
+// variables inside it.
+#if !defined(__CUDA_ARCH__)
+static std::once_flag flag;
+
+void* operator new(std::size_t size) {
+  static allocations_map_t local_allocs;
+  std::call_once(flag, [&]() { system_allocations = &local_allocs; });
+
+  // malloc(0) may return nullptr
+  if (size == 0) {
+    ++size;
+  }
+  void* ptr = std::malloc(size);
+  if (ptr == nullptr) {
+    throw std::bad_alloc{};
+  }
+
+  std::lock_guard lock(system_allocations_mutex);
+  local_allocs[ptr] = size;
+  return ptr;
+}
+
+void operator delete(void* ptr) noexcept {
+  std::free(ptr);
+  std::lock_guard lock(system_allocations_mutex);
+  system_allocations->erase(ptr);
+}
+
+void operator delete(void* ptr, std::size_t) noexcept {
+  std::free(ptr);
+  std::lock_guard lock(system_allocations_mutex);
+  system_allocations->erase(ptr);
+}
+#endif
+
+namespace cexa::kernel_replayer::impl {
+std::tuple<void*, void*, std::size_t> copy_extended_lambda_inner_buffer(
+    void* functor, std::size_t functor_size) {
+  char* functor_ptr = static_cast<char*>(functor);
+  void* buffer_ptr =
+      *reinterpret_cast<void**>((functor_ptr + functor_size) - sizeof(void*));
+
+  std::size_t buffer_size;
+  {
+    std::lock_guard lock(system_allocations_mutex);
+    if (!system_allocations->contains(buffer_ptr)) {
+      throw std::runtime_error(
+          "Failed to find and extended lambda data pointer in the allocation "
+          "table");
+    }
+    buffer_size = (*system_allocations)[buffer_ptr];
+  }
+
+  void* buffer_save = std::malloc(buffer_size);
+  std::memcpy(buffer_save, buffer_ptr, buffer_size);
+  // we copy the `buffer_size` first bytes of the extended lambda into the
+  // original functor, we make the assumtion that they have the same layout
+  // (assuming that no C-style array was captured).
+  // If this assumption proves false, we will have to save the original functor
+  // in the extraction phase and restore it here, but overloading `operator new`
+  // in the original program is probably a bad idea.
+  std::memcpy(buffer_ptr, functor, buffer_size);
+
+  return std::make_tuple(buffer_ptr, buffer_save, buffer_size);
+}
+
+void restore_extended_lambda_inner_buffer(void* buffer, void* saved_buffer,
+                                          std::size_t buffer_size) {
+  std::memcpy(buffer, saved_buffer, buffer_size);
+  std::free(saved_buffer);
+}
+}  // namespace cexa::kernel_replayer::impl
+
+#endif
+
 void remove_cli_args(int& argc, char* argv[], int pos, int n) {
   if (pos + n < argc) {
     for (int i = pos; i < argc - n; i++) {

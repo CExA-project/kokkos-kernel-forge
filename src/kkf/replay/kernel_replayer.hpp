@@ -9,11 +9,24 @@
 #include <stdexcept>
 #include <string>
 #include <variant>
+#include <tuple>
 #include <Kokkos_Core.hpp>
 #include "allocation.hpp"
 
+#if defined(KOKKOS_ENABLE_CUDA) && defined(KOKKOS_COMPILER_NVCC)
+#define KERNEL_REPLAYER_USE_NVCC_WORKAROUND
+#endif
+
 namespace cexa::kernel_replayer {
 namespace impl {
+
+#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
+std::tuple<void*, void*, std::size_t> copy_extended_lambda_inner_buffer(
+    void* functor, std::size_t functor_size);
+void restore_extended_lambda_inner_buffer(void* buffer, void* saved_buffer,
+                                          std::size_t buffer_size);
+#endif
+
 void init_functor(char* buffer, std::size_t size);
 void* get_allocation(impl::MemorySpaceType memory_space,
                      const std::string& label);
@@ -493,25 +506,37 @@ Functor replay_functor(const Functor& functor) {
   // - return f
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
 
-  void* tmp_buffer         = std::aligned_alloc(alignof(Functor), N);
-  Functor* tmp_functor     = new (tmp_buffer) Functor(functor);
-  void* tmp_functor_buffer = std::malloc(N);
-  std::memcpy(tmp_functor_buffer, tmp_buffer, N);
+  void* dummy_functor_storage = std::aligned_alloc(alignof(Functor), N);
+  Functor* dummy_functor      = new (dummy_functor_storage) Functor(functor);
+  void* dummy_functor_buffer_save = std::malloc(N);
+  std::memcpy(dummy_functor_buffer_save, dummy_functor_storage, N);
 
-  std::size_t copy_length = N;
-#if defined(KOKKOS_COMPILER_NVCC)
-  // extended lambdas on nvcc also have a "data" pointer
+#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
+  [[maybe_unused]] void* hdl_functor_ptr         = nullptr;
+  [[maybe_unused]] void* hdl_functor_buffer_save = nullptr;
+  [[maybe_unused]] std::size_t hdl_functor_size;
   if constexpr (__nv_is_extended_host_device_lambda_closure_type(Functor)) {
-    copy_length -= sizeof(void*);
+    impl::init_functor(static_cast<char*>(dummy_functor_storage),
+                       N - sizeof(void*));
+    std::tie(hdl_functor_ptr, hdl_functor_buffer_save, hdl_functor_size) =
+        impl::copy_extended_lambda_inner_buffer(dummy_functor_storage, N);
+  } else
+#endif
+  {
+    impl::init_functor(static_cast<char*>(dummy_functor_storage), N);
+  }
+  Functor f(*dummy_functor);
+
+  std::memcpy(dummy_functor_storage, dummy_functor_buffer_save, N);
+  std::free(dummy_functor_buffer_save);
+#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
+  if constexpr (__nv_is_extended_host_device_lambda_closure_type(Functor)) {
+    impl::restore_extended_lambda_inner_buffer(
+        hdl_functor_ptr, hdl_functor_buffer_save, hdl_functor_size);
   }
 #endif
-  impl::init_functor(static_cast<char*>(tmp_buffer), copy_length);
-  Functor f(*tmp_functor);
-
-  std::memcpy(tmp_buffer, tmp_functor_buffer, N);
-  std::free(tmp_functor_buffer);
-  tmp_functor->~Functor();
-  std::free(tmp_buffer);
+  dummy_functor->~Functor();
+  std::free(dummy_functor_storage);
 
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
 
