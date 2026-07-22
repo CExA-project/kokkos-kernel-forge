@@ -8,10 +8,6 @@ name: Ruche build and test
 
 on:
   workflow_dispatch:
-  # Temporary PR validation trigger: remove before merging.
-  push:
-    branches:
-    - ci/ruche-openmp
   schedule:
   - cron: "30 0 * * 1-5" # every weekday at midnight UTC
 
