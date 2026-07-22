@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <Kokkos_Core.hpp>
+#include <kkf/common/extended_lambda_utils.hpp>
 
 namespace cexa::kernel_replayer {
 namespace impl {
@@ -12,7 +13,10 @@ struct scratch_description {
   int level1;
 };
 
-void copy_functor(const unsigned char* data, std::size_t size);
+void copy_functor(const unsigned char* functor_data, std::size_t functor_size);
+void copy_functor(const unsigned char* functor_data, std::size_t functor_size,
+                  const unsigned char* inner_functor_data,
+                  std::size_t inner_functor_size);
 void register_scalar_policy(std::uint64_t N);
 void register_range_policy(const char* space, const char* schedule,
                            std::size_t index_type_size, bool index_type_signed,
@@ -147,8 +151,19 @@ void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
  */
 template <class Functor>
 Functor replay_functor(Functor&& functor) {
-  impl::copy_functor(reinterpret_cast<const unsigned char*>(&functor),
-                     sizeof(Functor));
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+    impl::copy_functor(reinterpret_cast<const unsigned char*>(&functor),
+                       sizeof(functor),
+                       reinterpret_cast<const unsigned char*>(
+                           kkf::hdl_utils::hdl_host_lambda_pointer(functor)),
+                       kkf::hdl_utils::hdl_host_lambda_size(functor));
+  } else
+#endif
+  {
+    impl::copy_functor(reinterpret_cast<const unsigned char*>(&functor),
+                       sizeof(Functor));
+  }
   return functor;
 }
 

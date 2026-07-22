@@ -10,6 +10,8 @@ namespace impl {
 
 void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
 void (*copy_functor_function)(const unsigned char*, std::size_t)     = nullptr;
+void (*copy_nvcc_lambda_function)(const unsigned char*, std::size_t,
+                                  const unsigned char*, std::size_t) = nullptr;
 void (*register_scalar_policy_function)(std::uint64_t)               = nullptr;
 void (*register_range_policy_function)(const char*, const char*, std::size_t,
                                        bool, std::uint64_t, std::uint64_t,
@@ -46,6 +48,8 @@ bool init_internal_functions_from_tool() {
                                  add_metadata_function) &&
          load_function_from_tool("cexa_kernel_dump_copy_functor",
                                  copy_functor_function) &&
+         load_function_from_tool("cexa_kernel_dump_copy_nvcc_lambda",
+                                 copy_nvcc_lambda_function) &&
          load_function_from_tool("cexa_kernel_dump_register_scalar_policy",
                                  register_scalar_policy_function) &&
          load_function_from_tool("cexa_kernel_dump_register_range_policy",
@@ -66,8 +70,10 @@ void init_internal_functions() {
     if (init_internal_functions_from_tool()) {
       has_kernel_dump_tool = true;
     } else {
-      add_metadata_function = [](const char*, const char*, std::size_t) {};
-      copy_functor_function = [](const unsigned char*, std::size_t) {};
+      add_metadata_function     = [](const char*, const char*, std::size_t) {};
+      copy_functor_function     = [](const unsigned char*, std::size_t) {};
+      copy_nvcc_lambda_function = [](const unsigned char*, std::size_t,
+                                     const unsigned char*, std::size_t) {};
       register_scalar_policy_function = [](std::uint64_t) {};
       register_range_policy_function = [](const char*, const char*, std::size_t,
                                           bool, std::uint64_t, std::uint64_t,
@@ -85,9 +91,17 @@ void init_internal_functions() {
   }
 }
 
-void copy_functor(const unsigned char* data, std::size_t size) {
+void copy_functor(const unsigned char* functor_data, std::size_t functor_size) {
   init_internal_functions();
-  copy_functor_function(data, size);
+  copy_functor_function(functor_data, functor_size);
+}
+
+void copy_functor(const unsigned char* functor_data, std::size_t functor_size,
+                  const unsigned char* inner_functor_data,
+                  std::size_t inner_functor_size) {
+  init_internal_functions();
+  copy_nvcc_lambda_function(functor_data, functor_size, inner_functor_data,
+                            inner_functor_size);
 }
 
 void register_scalar_policy(std::uint64_t N) {

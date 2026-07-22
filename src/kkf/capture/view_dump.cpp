@@ -224,6 +224,7 @@ void write_allocation_group(hid_t views_group,
 ViewDumpResult dump_view_snapshot(
     const AllocationSnapshot& snapshot,
     const std::vector<unsigned char>& functor_data,
+    const std::vector<unsigned char>& nvcc_inner_lambda_data,
     const std::unordered_map<std::string, std::string>& metadata,
     const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
                        kkf::RangePolicyDesc, kkf::MDRangePolicyDesc,
@@ -273,7 +274,13 @@ ViewDumpResult dump_view_snapshot(
     std::visit([&](auto&& arg) { write_policy(policy_group.get(), arg); },
                policy);
 
-    write_dataset(file.get(), "functor", functor_data);
+    Hdf5Handle functor_group(
+        CHECK_HDF5_ID(H5Gcreate2(file.get(), "functor", H5P_DEFAULT,
+                                 H5P_DEFAULT, H5P_DEFAULT)),
+        H5Gclose);
+    write_dataset(functor_group.get(), "functor", functor_data);
+    write_dataset(functor_group.get(), "nvcc_inner_lambda",
+                  nvcc_inner_lambda_data);
 
     file.close_checked();
     result.ok = true;

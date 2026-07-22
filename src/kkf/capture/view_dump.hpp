@@ -66,6 +66,7 @@ struct TeamPolicyDesc {
 ViewDumpResult dump_view_snapshot(
     const AllocationSnapshot& snapshot,
     const std::vector<unsigned char>& functor_data,
+    const std::vector<unsigned char>& nvcc_inner_lambda_data,
     const std::unordered_map<std::string, std::string>& metadata,
     const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
                        kkf::RangePolicyDesc, kkf::MDRangePolicyDesc,

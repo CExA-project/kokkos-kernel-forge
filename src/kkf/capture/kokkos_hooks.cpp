@@ -61,6 +61,7 @@ Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
 kkf::AllocationTracker allocation_tracker;
 std::vector<unsigned char> functor_data;
+std::vector<unsigned char> nvcc_inner_lambda_data;
 std::unordered_map<std::string, std::string> metadata;
 std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc, kkf::RangePolicyDesc,
              kkf::MDRangePolicyDesc, kkf::TeamPolicyDesc>
@@ -139,9 +140,9 @@ std::string obtain_dump_path(const std::string& filename) {
 void dump_views(const char* phase, const std::string& label,
                 const std::uint64_t kernel_id, const std::uint64_t invocation) {
   const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-  const kkf::ViewDumpResult result =
-      kkf::dump_view_snapshot(snapshot, functor_data, metadata, policy, phase,
-                              label, kernel_id, invocation);
+  const kkf::ViewDumpResult result       = kkf::dump_view_snapshot(
+      snapshot, functor_data, nvcc_inner_lambda_data, metadata, policy, phase,
+      label, kernel_id, invocation);
   const std::string dump_path = obtain_dump_path(result.filename);
   if (result.ok) {
     log_line("dump_written phase=", phase, " path=\"", dump_path,
@@ -240,6 +241,16 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_functor(
     const unsigned char* data, std::size_t size) {
   functor_data.resize(size);
   std::memcpy(functor_data.data(), data, size);
+}
+
+KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_nvcc_lambda(
+    const unsigned char* data, std::size_t size,
+    const unsigned char* inner_functor_data, std::size_t inner_functor_size) {
+  functor_data.resize(size);
+  std::memcpy(functor_data.data(), data, size);
+  nvcc_inner_lambda_data.resize(inner_functor_size);
+  std::memcpy(nvcc_inner_lambda_data.data(), inner_functor_data,
+              inner_functor_size);
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_scalar_policy(

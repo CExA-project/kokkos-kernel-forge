@@ -12,19 +12,16 @@
 #include <tuple>
 #include <Kokkos_Core.hpp>
 #include "allocation.hpp"
-
-#if defined(KOKKOS_ENABLE_CUDA) && defined(KOKKOS_COMPILER_NVCC)
-#define KERNEL_REPLAYER_USE_NVCC_WORKAROUND
-#endif
+#include <kkf/common/extended_lambda_utils.hpp>
 
 namespace cexa::kernel_replayer {
 namespace impl {
 
-#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
-std::tuple<void*, void*, std::size_t> copy_extended_lambda_inner_buffer(
-    void* functor, std::size_t functor_size);
-void restore_extended_lambda_inner_buffer(void* buffer, void* saved_buffer,
-                                          std::size_t buffer_size);
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+void* copy_extended_lambda_inner_lambda(void* inner_lambda_ptr,
+                                        std::size_t inner_lambda_size);
+void restore_extended_lambda_inner_lambda(void* inner_lambda_ptr,
+                                          void* inner_lambda_save);
 #endif
 
 void init_functor(char* buffer, std::size_t size);
@@ -512,15 +509,15 @@ Functor replay_functor(const Functor& functor) {
   void* dummy_functor_buffer_save = std::malloc(N);
   std::memcpy(dummy_functor_buffer_save, dummy_functor_storage, N);
 
-#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
-  [[maybe_unused]] void* hdl_functor_ptr         = nullptr;
-  [[maybe_unused]] void* hdl_functor_buffer_save = nullptr;
-  [[maybe_unused]] std::size_t hdl_functor_size;
-  if constexpr (__nv_is_extended_host_device_lambda_closure_type(Functor)) {
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+  [[maybe_unused]] void* inner_lambda_ptr  = nullptr;
+  [[maybe_unused]] void* inner_lambda_save = nullptr;
+  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
     impl::init_functor(static_cast<char*>(dummy_functor_storage),
                        N - sizeof(void*));
-    std::tie(hdl_functor_ptr, hdl_functor_buffer_save, hdl_functor_size) =
-        impl::copy_extended_lambda_inner_buffer(dummy_functor_storage, N);
+    inner_lambda_ptr  = kkf::hdl_utils::hdl_host_lambda_pointer(*dummy_functor);
+    inner_lambda_save = impl::copy_extended_lambda_inner_lambda(
+        inner_lambda_ptr, kkf::hdl_utils::hdl_host_lambda_size(*dummy_functor));
   } else
 #endif
   {
@@ -530,10 +527,10 @@ Functor replay_functor(const Functor& functor) {
 
   std::memcpy(dummy_functor_storage, dummy_functor_buffer_save, N);
   std::free(dummy_functor_buffer_save);
-#if defined(KERNEL_REPLAYER_USE_NVCC_WORKAROUND)
-  if constexpr (__nv_is_extended_host_device_lambda_closure_type(Functor)) {
-    impl::restore_extended_lambda_inner_buffer(
-        hdl_functor_ptr, hdl_functor_buffer_save, hdl_functor_size);
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+    impl::restore_extended_lambda_inner_lambda(inner_lambda_ptr,
+                                               inner_lambda_save);
   }
 #endif
   dummy_functor->~Functor();
