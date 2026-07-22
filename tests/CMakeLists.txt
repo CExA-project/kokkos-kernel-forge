@@ -3,7 +3,7 @@ enable_testing()
 set(TEST_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/launcher.sh")
 
 # CTest is unreliable through the Slurm launcher on Ruche. These targets run
-# the same replay tests inside a single GPU allocation.
+# the same replay tests inside a single Slurm allocation.
 add_custom_target(kkf_run_replay_tests)
 
 function(add_replay_test TEST_NAME COMPARE_OUTPUT)
