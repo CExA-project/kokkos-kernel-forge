@@ -174,6 +174,7 @@ Kokkos::View<int*> result_values(initial_values_ptr, 1024);
   a Kokkos team handle:
   - For `RangePolicy`: `KOKKOS_LABMDA(std::integral auto i) { ... }`
   - For `TeamPolicy`: `KOKKOS_LAMBDA(Kokkos::TeamHandle auto team) { ... }`
+  But note that generic kernels are not supported by nvcc
 - The `LaunchBounds` and `WorkTag` template arguments for execution policies
   cannot be automatically restored in the replayed program
 - Currently, the scratch memory parameters for `TeamPolicy` cannot be
