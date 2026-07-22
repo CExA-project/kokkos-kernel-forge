@@ -11,15 +11,16 @@ int main(int argc, char* argv[]) {
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", Kokkos::RangePolicy<Kokkos::IndexType<short>>(0, N),
+      "test_kernel",
+      Kokkos::RangePolicy<Kokkos::IndexType<std::uint64_t>>(0, N),
   // nvcc doesn't support generic host device lambdas
 #if !defined(KOKKOS_COMPILER_NVCC)
       KOKKOS_LAMBDA(std::integral auto i) {
-        if (!std::is_same_v<decltype(i), short>) {
+        if (!std::is_same_v<decltype(i), std::uint64_t>) {
           Kokkos::abort("Failed");
         }
 #else
-      KOKKOS_LAMBDA(short i) {
+      KOKKOS_LAMBDA(std::uint64_t i) {
 #endif
         values(i) *= 2;
       });
