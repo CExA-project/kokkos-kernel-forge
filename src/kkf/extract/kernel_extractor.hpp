@@ -175,8 +175,10 @@ void parallel_for(const std::string& label, const Policy& policy,
                   Functor&& functor) {
   if (impl::next_invocation_will_dump(label.c_str())) {
     impl::register_bounds(policy);
+    Kokkos::parallel_for(label, policy, replay_functor(functor));
+  } else {
+    Kokkos::parallel_for(label, policy, functor);
   }
-  Kokkos::parallel_for(label, policy, replay_functor(functor));
 }
 
 void add_metadata(const std::string& key, const std::string& value);
