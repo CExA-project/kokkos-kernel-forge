@@ -120,19 +120,32 @@ void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
   const auto [idx_type_size, idx_type_signed] =
       get_index_type_props<typename Policy::index_type>();
 
-// FIXME: Add the correct Kokkos version once the required PR lands into a
-// release
-#if KOKKOS_VERSION_GREATER(5, 2, 99)
-  scratch_description team_scratch{
-      .level0 = static_cast<int>(policy.team_scratch_size(0)),
-      .level1 = static_cast<int>(policy.team_scratch_size(1))};
-  scratch_description thread_scratch{
-      .level0 = static_cast<int>(policy.thread_scratch_size(0)),
-      .level1 = static_cast<int>(policy.thread_scratch_size(1))};
+  // Before Kokkos 5.3, {team,thread}_scratch_size are only available for Cuda,
+  // HIP and SYCL team policies.
+  constexpr bool supports_querying_scratch_size =
+#if KOKKOS_VERSION_GREATER_EQUAL(5, 3, 0)
+      true
+#elif defined(KOKKOS_ENABLE_CUDA)
+      std::is_same_v<typename Policy::execution_space, Kokkos::Cuda>
+#elif defined(KOKKOS_ENABLE_HIP)
+      std::is_same_v<typename Policy::execution_space, Kokkos::HIP>
+#elif defined(KOKKOS_ENABLE_SYCL)
+      std::is_same_v<typename Policy::execution_space, Kokkos::SYCL>
 #else
+      false
+#endif
+      ;
+
   scratch_description team_scratch{-1, -1};
   scratch_description thread_scratch{-1, -1};
-#endif
+
+  if constexpr (supports_querying_scratch_size) {
+    team_scratch.level0   = policy.team_scratch_size(0);
+    team_scratch.level1   = policy.team_scratch_size(1);
+    thread_scratch.level0 = policy.thread_scratch_size(0);
+    thread_scratch.level1 = policy.thread_scratch_size(1);
+  }
+
   int team_size = policy.impl_auto_team_size() ? -1 : policy.team_size();
   int vector_length =
       policy.impl_auto_vector_length() ? -1 : policy.impl_vector_length();
