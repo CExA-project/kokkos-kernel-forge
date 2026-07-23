@@ -11,6 +11,7 @@ target_sources(
          FILES
          ../extractor.hpp
          kernel_extractor.hpp
+         ../common/extended_lambda_utils.hpp
 )
 target_link_libraries(
   kernel_extractor PRIVATE $<BUILD_LOCAL_INTERFACE:kkf_warnings> $<BUILD_LOCAL_INTERFACE:kkf_sanitizers>
