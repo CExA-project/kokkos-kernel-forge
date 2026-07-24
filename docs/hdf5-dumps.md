@@ -68,9 +68,10 @@ tile      # int64_t dataset storing the tile dimensions
 # type == "team"
 team_size       # number of threads per team
 league_size     # number of teams
-team_scratch0   # amount of level 0 scratch memory per team, in bytes
-team_scratch1   # amount of level 1 scratch memory per team, in bytes
-thread_scratch0 # amount of level 0 scratch memory per thread, in bytes
-thread_scratch1 # amount of level 1 scratch memory per thread, in bytes
+vector_length   # number of vector lanes per team thread, or -1 if AUTO
+team_scratch_0   # amount of level 0 scratch memory per team, in bytes
+team_scratch_1   # amount of level 1 scratch memory per team, in bytes
+thread_scratch_0 # amount of level 0 scratch memory per thread, in bytes
+thread_scratch_1 # amount of level 1 scratch memory per thread, in bytes
 chunk_size      # the chunk size parameter
 ```

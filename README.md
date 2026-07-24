@@ -91,7 +91,7 @@ function to save the functor's data
 #include <kkf/extractor.hpp>
 
 int main() {
-  Kokkod::View<int*> view("view", N);
+  Kokkos::View<int*> values("view", N);
   my_funky_parallel_for("kernel", N,
                         cexa::kernel_replayer::replay_functor(
                             KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
