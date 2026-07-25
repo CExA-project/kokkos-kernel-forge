@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: kokkos-develop-${{ github.event_name }}
+  group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
