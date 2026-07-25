@@ -1,0 +1,133 @@
+name: Kokkos develop compatibility
+
+on:
+  workflow_dispatch:
+  # Temporary trigger for validating this workflow before merge.
+  push:
+    branches:
+    - ci/nightly-kokkos-devop-ci
+  schedule:
+  - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kokkos-develop-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    name: GCC Release with Kokkos develop
+    if: github.repository == 'CExA-project/kokkos-kernel-forge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    continue-on-error: true
+
+    env:
+      CXX: g++
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-develop
+      kkf_ROOT: ${{ github.workspace }}/kkf_install
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v7
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          cmake \
+          g++ \
+          hdf5-tools \
+          libhdf5-dev \
+          ninja-build
+
+    - name: Resolve Kokkos develop SHA
+      id: kokkos-ref
+      run: |
+        read -r sha ref < <(git ls-remote https://github.com/kokkos/kokkos.git refs/heads/develop)
+        test "$ref" = "refs/heads/develop"
+        test -n "$sha"
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "KOKKOS_DEVELOP_SHA=$sha" >> "$GITHUB_ENV"
+        echo "$sha"
+
+    - name: Compute Kokkos cache fingerprint
+      run: |
+        {
+          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
+          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
+          echo "ImageOS=${ImageOS:-unknown}"
+          echo "ImageVersion=${ImageVersion:-unknown}"
+          echo "KOKKOS_DEVELOP_SHA=${{ steps.kokkos-ref.outputs.sha }}"
+          echo "Kokkos_ENABLE_SERIAL=ON"
+          echo "CMAKE_BUILD_TYPE=Release"
+          echo "CMAKE_CXX_STANDARD=20"
+          echo "CXX=$CXX"
+          "$CXX" --version
+          cmake --version
+          ninja --version
+        } > .kokkos-cache-fingerprint
+        cat .kokkos-cache-fingerprint
+
+    - name: Cache Kokkos install
+      id: cache-kokkos
+      uses: actions/cache@v6
+      with:
+        path: ${{ env.Kokkos_ROOT }}
+        key: kokkos-develop-${{ runner.os }}-${{ runner.arch }}-gcc-${{ steps.kokkos-ref.outputs.sha }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+
+    - name: Build and install Kokkos develop
+      if: steps.cache-kokkos.outputs.cache-hit != 'true'
+      run: |
+        git clone --depth 1 --branch develop https://github.com/kokkos/kokkos.git kokkos-src
+        if ! git -C kokkos-src cat-file -e "$KOKKOS_DEVELOP_SHA^{commit}"; then
+          git -C kokkos-src fetch --depth 1 origin "$KOKKOS_DEVELOP_SHA"
+        fi
+        git -C kokkos-src checkout --detach "$KOKKOS_DEVELOP_SHA"
+        test "$(git -C kokkos-src rev-parse HEAD)" = "$KOKKOS_DEVELOP_SHA"
+        cmake -S kokkos-src -B kokkos-build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_CXX_EXTENSIONS=OFF \
+          -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
+          -DKokkos_ENABLE_SERIAL=ON
+        cmake --build kokkos-build --parallel "$(nproc)"
+        cmake --install kokkos-build
+
+    - name: Configure project
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+          -DCMAKE_PREFIX_PATH="$Kokkos_ROOT" \
+          -DKKF_BUILD_TESTS=ON \
+          -DKKF_BUILD_EXAMPLES=ON \
+          -DKKF_ENABLE_WARNINGS=ON
+
+    - name: Build project
+      run: cmake --build build --parallel "$(nproc)"
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)"
+
+    - name: Install the project
+      run: cmake --install build --prefix "$kkf_ROOT"
+
+    - name: Test the installation
+      working-directory: ${{ github.workspace }}/tests/install_test
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+          -DCMAKE_CXX_EXTENSIONS=OFF \
+          -DCMAKE_PREFIX_PATH="$Kokkos_ROOT;$kkf_ROOT"
+        cmake --build build --parallel "$(nproc)"
+        KOKKOS_TOOLS_LIBS="$kkf_ROOT/lib/libkkf.so" KOKKOS_TOOLS_ARGS=--kkf-dump-kernel-label=test_kernel ./build/test
+        ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5
