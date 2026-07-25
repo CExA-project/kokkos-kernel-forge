@@ -25,6 +25,10 @@ jobs:
 
     env:
       CXX: g++
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
       Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-develop
       kkf_ROOT: ${{ github.workspace }}/kkf_install
 
@@ -36,6 +40,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
+          ccache \
           cmake \
           g++ \
           hdf5-tools \
@@ -52,33 +57,20 @@ jobs:
         echo "KOKKOS_DEVELOP_SHA=$sha" >> "$GITHUB_ENV"
         echo "$sha"
 
-    - name: Compute Kokkos cache fingerprint
-      run: |
-        {
-          echo "RUNNER_OS=${RUNNER_OS:-unknown}"
-          echo "RUNNER_ARCH=${RUNNER_ARCH:-unknown}"
-          echo "ImageOS=${ImageOS:-unknown}"
-          echo "ImageVersion=${ImageVersion:-unknown}"
-          echo "KOKKOS_DEVELOP_SHA=${{ steps.kokkos-ref.outputs.sha }}"
-          echo "Kokkos_ENABLE_SERIAL=ON"
-          echo "CMAKE_BUILD_TYPE=Release"
-          echo "CMAKE_CXX_STANDARD=20"
-          echo "CXX=$CXX"
-          "$CXX" --version
-          cmake --version
-          ninja --version
-        } > .kokkos-cache-fingerprint
-        cat .kokkos-cache-fingerprint
-
-    - name: Cache Kokkos install
-      id: cache-kokkos
+    - name: Cache compiler objects
       uses: actions/cache@v6
       with:
-        path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-develop-${{ runner.os }}-${{ runner.arch }}-gcc-${{ steps.kokkos-ref.outputs.sha }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+        path: ${{ env.CCACHE_DIR }}
+        key: ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-gcc-${{ steps.kokkos-ref.outputs.sha }}
+        restore-keys: |
+          ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-gcc-
+
+    - name: Configure ccache
+      run: |
+        ccache --set-config=max_size="$CCACHE_MAXSIZE"
+        ccache --zero-stats
 
     - name: Build and install Kokkos develop
-      if: steps.cache-kokkos.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 --branch develop https://github.com/kokkos/kokkos.git kokkos-src
         if ! git -C kokkos-src cat-file -e "$KOKKOS_DEVELOP_SHA^{commit}"; then
@@ -89,6 +81,7 @@ jobs:
         cmake -S kokkos-src -B kokkos-build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_STANDARD=20 \
           -DCMAKE_CXX_EXTENSIONS=OFF \
           -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
@@ -101,6 +94,7 @@ jobs:
         cmake -S . -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_STANDARD=20 \
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DCMAKE_PREFIX_PATH="$Kokkos_ROOT" \
@@ -123,6 +117,7 @@ jobs:
         cmake -S . -B build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
           -DCMAKE_CXX_STANDARD=20 \
           -DCMAKE_CXX_STANDARD_REQUIRED=ON \
           -DCMAKE_CXX_EXTENSIONS=OFF \
@@ -130,3 +125,10 @@ jobs:
         cmake --build build --parallel "$(nproc)"
         KOKKOS_TOOLS_LIBS="$kkf_ROOT/lib/libkkf.so" KOKKOS_TOOLS_ARGS=--kkf-dump-kernel-label=test_kernel ./build/test
         ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5
+
+    - name: Show ccache statistics
+      if: always()
+      run: |
+        if command -v ccache >/dev/null; then
+          ccache --show-stats
+        fi
