@@ -7,29 +7,40 @@ on:
     branches:
     - ci/nightly-kokkos-devop-ci
   schedule:
-  - cron: "17 3 * * 1"
+  - cron: "17 3 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   compatibility:
-    name: GCC Release with Kokkos develop
+    name: ${{ matrix.name }}
     if: github.repository == 'CExA-project/kokkos-kernel-forge'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: GCC Release with Kokkos develop
+          compiler: gcc
+          cxx: g++
+        - name: Clang Release with Kokkos develop
+          compiler: clang
+          cxx: clang++
+
     env:
-      CXX: g++
+      CXX: ${{ matrix.cxx }}
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPRESS: "true"
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 1G
-      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-develop
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-develop-${{ matrix.compiler }}
       kkf_ROOT: ${{ github.workspace }}/kkf_install
 
     steps:
@@ -41,6 +52,7 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           ccache \
+          clang \
           cmake \
           g++ \
           hdf5-tools \
@@ -61,9 +73,10 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ${{ env.CCACHE_DIR }}
-        key: ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-gcc-${{ steps.kokkos-ref.outputs.sha }}
+        key: ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.compiler }}-${{ steps.kokkos-ref.outputs.sha }}-${{ github.sha }}
         restore-keys: |
-          ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-gcc-
+          ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.compiler }}-${{ steps.kokkos-ref.outputs.sha }}-
+          ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.compiler }}-
 
     - name: Configure ccache
       run: |
