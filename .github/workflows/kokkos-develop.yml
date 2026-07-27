@@ -7,7 +7,7 @@ on:
     branches:
     - ci/nightly-kokkos-devop-ci
   schedule:
-  - cron: "17 3 * * 0"
+    - cron: "0 1 * * 1-5" # every weekday at 1am
 
 permissions:
   contents: read
