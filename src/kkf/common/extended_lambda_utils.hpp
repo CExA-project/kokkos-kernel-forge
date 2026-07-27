@@ -44,8 +44,7 @@ namespace kkf::hdl_utils {
 // the hdl wrappers.
 template <class T>
 std::size_t hdl_host_lambda_size(T) {
-  assert(false);
-  return 0;
+  std::abort();
 }
 
 // Function used to return the size of a host only lambda with the same captures

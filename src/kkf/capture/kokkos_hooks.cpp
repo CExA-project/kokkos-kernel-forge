@@ -241,6 +241,7 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_functor(
     const unsigned char* data, std::size_t size) {
   functor_data.resize(size);
   std::memcpy(functor_data.data(), data, size);
+  nvcc_inner_lambda_data.clear();
 }
 
 KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_nvcc_lambda(
