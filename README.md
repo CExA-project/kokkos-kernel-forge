@@ -162,10 +162,10 @@ kernel respectively.
 ```cpp
 using memory_space = Kokkos::DefaultExecutionSpace::memory_space;
 // Value of `values` before the kernel
-int* initial_values_ptr = static_cast<int*>(krepe::get_allocation<memory_space>("values");
+int* initial_values_ptr = static_cast<int*>(krepe::get_allocation<memory_space>("values"));
 Kokkos::View<int*> intial_values(initial_values_ptr, 1024);
 // Value of `values` after the kernel
-int* result_values_ptr = static_cast<int*>(krepe::get_out_allocation<memory_space>("values");
+int* result_values_ptr = static_cast<int*>(krepe::get_out_allocation<memory_space>("values"));
 Kokkos::View<int*> result_values(initial_values_ptr, 1024);
 ```
 
