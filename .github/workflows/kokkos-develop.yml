@@ -2,10 +2,6 @@ name: Kokkos develop compatibility
 
 on:
   workflow_dispatch:
-  # Temporary trigger for validating this workflow before merge.
-  push:
-    branches:
-    - ci/nightly-kokkos-devop-ci
   schedule:
     - cron: "0 1 * * 1-5" # every weekday at 1am
 
