@@ -33,12 +33,12 @@
 
 #define KOKKOS_HOOKS_EXPORT __attribute__((visibility("default")))
 
-#if !defined(KKF_KOKKOS_ALLOCATION_HEADER_SIZE)
-#error "KKF_KOKKOS_ALLOCATION_HEADER_SIZE must be defined by CMake"
+#if !defined(KREPE_KOKKOS_ALLOCATION_HEADER_SIZE)
+#error "KREPE_KOKKOS_ALLOCATION_HEADER_SIZE must be defined by CMake"
 #endif
 
-static_assert(KKF_KOKKOS_ALLOCATION_HEADER_SIZE == 128 ||
-                  KKF_KOKKOS_ALLOCATION_HEADER_SIZE == 256,
+static_assert(KREPE_KOKKOS_ALLOCATION_HEADER_SIZE == 128 ||
+                  KREPE_KOKKOS_ALLOCATION_HEADER_SIZE == 256,
               "unexpected Kokkos allocation header size");
 
 namespace {
@@ -59,21 +59,22 @@ std::unordered_map<std::uint64_t, KernelState> kernel_states;
 std::unordered_map<std::string, std::uint64_t> kernel_invocations;
 Kokkos_Tools_toolInvokedFenceFunction tool_fence = nullptr;
 
-kkf::AllocationTracker allocation_tracker;
+krepe::AllocationTracker allocation_tracker;
 std::vector<unsigned char> functor_data;
 std::vector<unsigned char> nvcc_inner_lambda_data;
 std::unordered_map<std::string, std::string> metadata;
-std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc, kkf::RangePolicyDesc,
-             kkf::MDRangePolicyDesc, kkf::TeamPolicyDesc>
-    policy = kkf::NoPolicyDesc{};
+std::variant<krepe::NoPolicyDesc, krepe::ScalarPolicyDesc,
+             krepe::RangePolicyDesc, krepe::MDRangePolicyDesc,
+             krepe::TeamPolicyDesc>
+    policy = krepe::NoPolicyDesc{};
 
 std::string dump_kernel_label;
 std::optional<std::uint64_t> dump_kernel_invocation = 1;
 
 constexpr std::string_view dump_kernel_label_option =
-    "--kkf-dump-kernel-label=";
+    "--krepe-dump-kernel-label=";
 constexpr std::string_view dump_kernel_invocation_option =
-    "--kkf-dump-kernel-invocation=";
+    "--krepe-dump-kernel-invocation=";
 
 std::string label_or_unknown(const char* label) {
   return label != nullptr ? label : "<unknown>";
@@ -104,7 +105,7 @@ std::string space_name(const Kokkos_Profiling_SpaceHandle& handle) {
 template <typename... Args>
 void log_line(Args&&... args) {
   std::lock_guard<std::mutex> lock(log_mutex);
-  std::cerr << "[kkf-capture] ";
+  std::cerr << "[krepe-capture] ";
   (std::cerr << ... << args);
   std::cerr << '\n';
 }
@@ -139,8 +140,8 @@ std::string obtain_dump_path(const std::string& filename) {
 
 void dump_views(const char* phase, const std::string& label,
                 const std::uint64_t kernel_id, const std::uint64_t invocation) {
-  const kkf::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-  const kkf::ViewDumpResult result       = kkf::dump_view_snapshot(
+  const krepe::AllocationSnapshot snapshot = allocation_tracker.snapshot();
+  const krepe::ViewDumpResult result       = krepe::dump_view_snapshot(
       snapshot, functor_data, nvcc_inner_lambda_data, metadata, policy, phase,
       label, kernel_id, invocation);
   const std::string dump_path = obtain_dump_path(result.filename);
@@ -162,7 +163,7 @@ bool should_track_allocation(const char* label, const void* ptr) {
 
 const void* allocation_data_pointer(const void* ptr) {
   return static_cast<const unsigned char*>(ptr) +
-         KKF_KOKKOS_ALLOCATION_HEADER_SIZE;
+         KREPE_KOKKOS_ALLOCATION_HEADER_SIZE;
 }
 
 void begin_kernel(const char* label, const std::uint32_t device_id,
@@ -229,22 +230,22 @@ void end_kernel(const std::uint64_t kernel_id) {
 }  // namespace
 
 extern "C" {
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_add_metadata(const char* key,
-                                                       const char* value,
-                                                       std::size_t size) {
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_add_metadata(const char* key,
+                                                        const char* value,
+                                                        std::size_t size) {
   // We use the (ptr, size) constructor to accommodate strings containing null
   // characters
   metadata[key] = std::string(value, size);
 }
 
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_functor(
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_copy_functor(
     const unsigned char* data, std::size_t size) {
   functor_data.resize(size);
   std::memcpy(functor_data.data(), data, size);
   nvcc_inner_lambda_data.clear();
 }
 
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_nvcc_lambda(
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_copy_nvcc_lambda(
     const unsigned char* data, std::size_t size,
     const unsigned char* inner_functor_data, std::size_t inner_functor_size) {
   functor_data.resize(size);
@@ -254,42 +255,42 @@ KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_copy_nvcc_lambda(
               inner_functor_size);
 }
 
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_scalar_policy(
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_scalar_policy(
     std::uint64_t N) {
-  policy = kkf::ScalarPolicyDesc(N);
+  policy = krepe::ScalarPolicyDesc(N);
 }
 
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_range_policy(
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_range_policy(
     const char* space, const char* schedule, std::size_t index_type_size,
     bool index_type_signed, std::uint64_t begin, std::uint64_t end,
     int chunk_size) {
-  policy = kkf::RangePolicyDesc({index_type_size, index_type_signed}, space,
-                                schedule, begin, end, chunk_size);
+  policy = krepe::RangePolicyDesc({index_type_size, index_type_signed}, space,
+                                  schedule, begin, end, chunk_size);
 }
 
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_mdrange_policy(
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_mdrange_policy(
     const char* space, const char* schedule, std::size_t rank,
     const char* outer_dir, const char* inner_dir, std::size_t index_type_size,
     bool index_type_signed, const std::int64_t* begin, const std::int64_t* end,
     const std::int64_t* tile) {
-  policy = kkf::MDRangePolicyDesc(
+  policy = krepe::MDRangePolicyDesc(
       {index_type_size, index_type_signed}, space, schedule, rank, outer_dir,
       inner_dir, std::vector(begin, begin + rank), std::vector(end, end + rank),
       std::vector(tile, tile + rank));
 }
 
-KOKKOS_HOOKS_EXPORT void cexa_kernel_dump_register_team_policy(
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_team_policy(
     const char* space, const char* schedule, std::size_t index_type_size,
     bool index_type_signed, int team_size, int league_size, int vector_length,
     int team_scratch_0, int team_scratch_1, int thread_scratch_0,
     int thread_scratch_1, int chunk_size) {
-  policy = kkf::TeamPolicyDesc({index_type_size, index_type_signed}, space,
-                               schedule, team_size, league_size, vector_length,
-                               team_scratch_0, team_scratch_1, thread_scratch_0,
-                               thread_scratch_1, chunk_size);
+  policy = krepe::TeamPolicyDesc(
+      {index_type_size, index_type_signed}, space, schedule, team_size,
+      league_size, vector_length, team_scratch_0, team_scratch_1,
+      thread_scratch_0, thread_scratch_1, chunk_size);
 }
 
-KOKKOS_HOOKS_EXPORT bool cexa_kernel_dump_next_invocation_will_dump(
+KOKKOS_HOOKS_EXPORT bool krepe_kernel_dump_next_invocation_will_dump(
     const char* kernel_name) {
   std::lock_guard<std::mutex> lock(state_mutex);
   return should_dump_views_for_invocation(kernel_name,

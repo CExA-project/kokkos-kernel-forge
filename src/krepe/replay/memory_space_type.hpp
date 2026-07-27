@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-namespace cexa::kernel_replayer::impl {
+namespace krepe::kernel_replayer::impl {
 
 enum class MemorySpaceType {
   HOST,
@@ -13,4 +13,4 @@ inline constexpr MemorySpaceType memory_space_type_from_string(
     std::string_view space_name) {
   return space_name == "Host" ? MemorySpaceType::HOST : MemorySpaceType::DEVICE;
 }
-}  // namespace cexa::kernel_replayer::impl
+}  // namespace krepe::kernel_replayer::impl

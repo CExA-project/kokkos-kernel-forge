@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/extractor.hpp>
+#include <krepe/extractor.hpp>
 
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
       "init", Kokkos::RangePolicy<exec_space>(0, N),
       KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  cexa::kernel_replayer::parallel_for(
+  krepe::kernel_replayer::parallel_for(
       "test_kernel", Kokkos::RangePolicy<exec_space>(0, N),
       KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();

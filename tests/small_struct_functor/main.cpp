@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/extractor.hpp>
+#include <krepe/extractor.hpp>
 
 struct Functor {
  private:
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
 
   int x = 42;
   int y = -67;
-  cexa::kernel_replayer::parallel_for("test_kernel", 1, Functor(x, y));
+  krepe::kernel_replayer::parallel_for("test_kernel", 1, Functor(x, y));
   Kokkos::fence();
 
   return 0;

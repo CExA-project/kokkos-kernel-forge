@@ -5,7 +5,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace kkf::hdf5 {
+namespace krepe::hdf5 {
 
 inline void check_call(herr_t status, const char* expr, const char* file,
                        int line) {
@@ -58,13 +58,13 @@ class ScopedHandle {
   herr_t (*close_)(hid_t);
 };
 
-}  // namespace kkf::hdf5
+}  // namespace krepe::hdf5
 
-#define CHECK_HDF5_CALL(expr)                                          \
-  ::kkf::hdf5::check_call((expr), #expr,                               \
+#define CHECK_HDF5_CALL(expr)                                            \
+  ::krepe::hdf5::check_call((expr), #expr,                               \
+                            std::source_location::current().file_name(), \
+                            std::source_location::current().line())
+#define CHECK_HDF5_ID(expr)                                            \
+  ::krepe::hdf5::check_id((expr), #expr,                               \
                           std::source_location::current().file_name(), \
                           std::source_location::current().line())
-#define CHECK_HDF5_ID(expr)                                          \
-  ::kkf::hdf5::check_id((expr), #expr,                               \
-                        std::source_location::current().file_name(), \
-                        std::source_location::current().line())

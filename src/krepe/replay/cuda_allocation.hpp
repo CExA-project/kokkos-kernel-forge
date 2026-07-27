@@ -9,7 +9,7 @@
 #include <cuda.h>
 #include <Kokkos_Core.hpp>
 
-namespace cexa::kernel_replayer::impl {
+namespace krepe::kernel_replayer::impl {
 inline void throw_error(CUresult error, const char* expr, const char* file,
                         int line) {
   if (error == CUDA_SUCCESS) {
@@ -34,7 +34,7 @@ inline void throw_error(CUresult error, const char* expr, const char* file,
 }
 
 #define CHECK_CUDA_CALL(expr) \
-  ::cexa::kernel_replayer::impl::throw_error((expr), #expr, __FILE__, __LINE__)
+  ::krepe::kernel_replayer::impl::throw_error((expr), #expr, __FILE__, __LINE__)
 
 inline auto regular_device_allocate(std::size_t size, char* data) {
   void* ptr;
@@ -117,4 +117,4 @@ inline void device_deallocate(void* address, std::size_t size) {
   CHECK_CUDA_CALL(
       cuMemAddressFree(reinterpret_cast<CUdeviceptr>(address), size));
 }
-}  // namespace cexa::kernel_replayer::impl
+}  // namespace krepe::kernel_replayer::impl

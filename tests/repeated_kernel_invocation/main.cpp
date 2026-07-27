@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/extractor.hpp>
+#include <krepe/extractor.hpp>
 
 struct MultiplyFunctor {
   int factor;
@@ -17,16 +17,16 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  cexa::kernel_replayer::parallel_for("test_kernel", N,
-                                      MultiplyFunctor{2, values});
+  krepe::kernel_replayer::parallel_for("test_kernel", N,
+                                       MultiplyFunctor{2, values});
   Kokkos::fence();
 
-  cexa::kernel_replayer::parallel_for("test_kernel", N,
-                                      MultiplyFunctor{3, values});
+  krepe::kernel_replayer::parallel_for("test_kernel", N,
+                                       MultiplyFunctor{3, values});
   Kokkos::fence();
 
-  cexa::kernel_replayer::parallel_for("test_kernel", N,
-                                      MultiplyFunctor{4, values});
+  krepe::kernel_replayer::parallel_for("test_kernel", N,
+                                       MultiplyFunctor{4, values});
   Kokkos::fence();
 
   auto h_values =

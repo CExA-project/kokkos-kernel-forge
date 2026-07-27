@@ -1,7 +1,9 @@
 add_executable(non_default_execution_space main.cpp)
-target_link_libraries(non_default_execution_space PRIVATE kkf_warnings kkf_sanitizers Kokkos::kokkos kernel_extractor)
+target_link_libraries(
+  non_default_execution_space PRIVATE krepe_warnings krepe_sanitizers Kokkos::kokkos kernel_extractor
+)
 
 add_executable(non_default_execution_space_replay replay_main.cpp)
-target_link_libraries(non_default_execution_space_replay PRIVATE kkf_warnings Kokkos::kokkos kernel_replayer)
+target_link_libraries(non_default_execution_space_replay PRIVATE krepe_warnings Kokkos::kokkos kernel_replayer)
 
 add_replay_test(non_default_execution_space FALSE)

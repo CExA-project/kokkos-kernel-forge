@@ -13,7 +13,7 @@ testing/
 /CMakeSettings.json
 /out/mytest
 CMakeUserPresets.json
-kkf_*.h5
+krepe_*.h5
 
 # build directories in source tree
 /build*

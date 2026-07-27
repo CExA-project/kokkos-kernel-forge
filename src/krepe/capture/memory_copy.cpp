@@ -4,15 +4,15 @@
 #include <exception>
 #include <limits>
 
-#if defined(KKF_ENABLE_CUDA_DUMP)
+#if defined(KREPE_ENABLE_CUDA_DUMP)
 #include <cuda_runtime_api.h>
 #endif
 
-#if defined(KKF_ENABLE_HIP_DUMP)
+#if defined(KREPE_ENABLE_HIP_DUMP)
 #include <hip/hip_runtime_api.h>
 #endif
 
-namespace kkf {
+namespace krepe {
 namespace {
 
 // SYCLDeviceUSM and OpenACCSpace, need dedicated device-to-host
@@ -52,12 +52,12 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
   if (!host_accessible && !cuda_device && !hip_device) {
     return "memory space is not supported for raw byte dumps";
   }
-#if !defined(KKF_ENABLE_CUDA_DUMP)
+#if !defined(KREPE_ENABLE_CUDA_DUMP)
   if (cuda_device) {
     return "CUDA dump support was not enabled at build time";
   }
 #endif
-#if !defined(KKF_ENABLE_HIP_DUMP)
+#if !defined(KREPE_ENABLE_HIP_DUMP)
   if (hip_device) {
     return "HIP dump support was not enabled at build time";
   }
@@ -79,7 +79,7 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
     return {};
   }
 
-#if defined(KKF_ENABLE_CUDA_DUMP)
+#if defined(KREPE_ENABLE_CUDA_DUMP)
   if (cuda_device) {
     const cudaError_t error =
         cudaMemcpy(bytes.data(), data, bytes.size(), cudaMemcpyDeviceToHost);
@@ -92,7 +92,7 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
   }
 #endif
 
-#if defined(KKF_ENABLE_HIP_DUMP)
+#if defined(KREPE_ENABLE_HIP_DUMP)
   if (hip_device) {
     const hipError_t error =
         hipMemcpy(bytes.data(), data, bytes.size(), hipMemcpyDeviceToHost);
@@ -108,4 +108,4 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
   return "internal error: no copy path selected";
 }
 
-}  // namespace kkf
+}  // namespace krepe

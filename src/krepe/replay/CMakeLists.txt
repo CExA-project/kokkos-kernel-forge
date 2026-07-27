@@ -1,4 +1,4 @@
-function(kkf_add_kernel_replayer TARGET_NAME)
+function(krepe_add_kernel_replayer TARGET_NAME)
   add_library("${TARGET_NAME}")
   target_sources(
     "${TARGET_NAME}"
@@ -28,17 +28,17 @@ function(kkf_add_kernel_replayer TARGET_NAME)
             ../common/hdf5_utils.hpp
   )
   target_link_libraries(
-    "${TARGET_NAME}" PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl $<BUILD_LOCAL_INTERFACE:kkf_warnings>
+    "${TARGET_NAME}" PRIVATE Kokkos::kokkos hdf5::hdf5 hdf5::hdf5_hl $<BUILD_LOCAL_INTERFACE:krepe_warnings>
   )
 endfunction()
 
-kkf_add_kernel_replayer(kernel_replayer)
+krepe_add_kernel_replayer(kernel_replayer)
 
-if(KKF_ENABLE_ASAN OR KKF_ENABLE_UBSAN)
-  kkf_add_kernel_replayer(kernel_replayer_sanitized)
-  target_link_libraries(kernel_replayer_sanitized PRIVATE kkf_sanitizers)
+if(KREPE_ENABLE_ASAN OR KREPE_ENABLE_UBSAN)
+  krepe_add_kernel_replayer(kernel_replayer_sanitized)
+  target_link_libraries(kernel_replayer_sanitized PRIVATE krepe_sanitizers)
 else()
   add_library(kernel_replayer_sanitized ALIAS kernel_replayer)
 endif()
 
-install(TARGETS kernel_replayer EXPORT kkfTargets FILE_SET replay_headers)
+install(TARGETS kernel_replayer EXPORT krepeTargets FILE_SET replay_headers)

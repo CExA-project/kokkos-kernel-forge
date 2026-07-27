@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace kkf {
+namespace krepe {
 
 struct AllocationRecord {
   std::string label;
@@ -42,4 +42,4 @@ class AllocationTracker {
       active_allocations_;
 };
 
-}  // namespace kkf
+}  // namespace krepe

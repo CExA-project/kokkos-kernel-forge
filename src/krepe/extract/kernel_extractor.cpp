@@ -5,7 +5,7 @@
 
 #include <optional>
 
-namespace cexa::kernel_replayer {
+namespace krepe::kernel_replayer {
 namespace impl {
 
 void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
@@ -44,21 +44,21 @@ bool init_internal_functions_from_tool() {
 
   // TODO: print a warning when some (at least 1 but not all) functions cannot
   // be loaded to indicate that there is an issue
-  return load_function_from_tool("cexa_kernel_dump_add_metadata",
+  return load_function_from_tool("krepe_kernel_dump_add_metadata",
                                  add_metadata_function) &&
-         load_function_from_tool("cexa_kernel_dump_copy_functor",
+         load_function_from_tool("krepe_kernel_dump_copy_functor",
                                  copy_functor_function) &&
-         load_function_from_tool("cexa_kernel_dump_copy_nvcc_lambda",
+         load_function_from_tool("krepe_kernel_dump_copy_nvcc_lambda",
                                  copy_nvcc_lambda_function) &&
-         load_function_from_tool("cexa_kernel_dump_register_scalar_policy",
+         load_function_from_tool("krepe_kernel_dump_register_scalar_policy",
                                  register_scalar_policy_function) &&
-         load_function_from_tool("cexa_kernel_dump_register_range_policy",
+         load_function_from_tool("krepe_kernel_dump_register_range_policy",
                                  register_range_policy_function) &&
-         load_function_from_tool("cexa_kernel_dump_register_mdrange_policy",
+         load_function_from_tool("krepe_kernel_dump_register_mdrange_policy",
                                  register_mdrange_policy_function) &&
-         load_function_from_tool("cexa_kernel_dump_register_team_policy",
+         load_function_from_tool("krepe_kernel_dump_register_team_policy",
                                  register_team_policy_function) &&
-         load_function_from_tool("cexa_kernel_dump_next_invocation_will_dump",
+         load_function_from_tool("krepe_kernel_dump_next_invocation_will_dump",
                                  next_invocation_will_dump_function);
 }
 #else
@@ -155,4 +155,4 @@ void add_metadata(const std::string& key, const std::string& value) {
   impl::add_metadata_function(key.c_str(), value.c_str(), value.size());
 }
 
-}  // namespace cexa::kernel_replayer
+}  // namespace krepe::kernel_replayer

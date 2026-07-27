@@ -15,7 +15,7 @@ concurrency:
 jobs:
   compatibility:
     name: ${{ matrix.name }}
-    if: github.repository == 'CExA-project/kokkos-kernel-forge'
+    if: github.repository == 'CExA-project/krepe'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -37,7 +37,7 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 1G
       Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-develop-${{ matrix.compiler }}
-      kkf_ROOT: ${{ github.workspace }}/kkf_install
+      krepe_ROOT: ${{ github.workspace }}/krepe_install
 
     steps:
     - name: Check out repository
@@ -106,9 +106,9 @@ jobs:
           -DCMAKE_CXX_STANDARD=20 \
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DCMAKE_PREFIX_PATH="$Kokkos_ROOT" \
-          -DKKF_BUILD_TESTS=ON \
-          -DKKF_BUILD_EXAMPLES=ON \
-          -DKKF_ENABLE_WARNINGS=ON
+          -DKREPE_BUILD_TESTS=ON \
+          -DKREPE_BUILD_EXAMPLES=ON \
+          -DKREPE_ENABLE_WARNINGS=ON
 
     - name: Build project
       run: cmake --build build --parallel "$(nproc)"
@@ -117,7 +117,7 @@ jobs:
       run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)"
 
     - name: Install the project
-      run: cmake --install build --prefix "$kkf_ROOT"
+      run: cmake --install build --prefix "$krepe_ROOT"
 
     - name: Test the installation
       working-directory: ${{ github.workspace }}/tests/install_test
@@ -129,9 +129,9 @@ jobs:
           -DCMAKE_CXX_STANDARD=20 \
           -DCMAKE_CXX_STANDARD_REQUIRED=ON \
           -DCMAKE_CXX_EXTENSIONS=OFF \
-          -DCMAKE_PREFIX_PATH="$Kokkos_ROOT;$kkf_ROOT"
+          -DCMAKE_PREFIX_PATH="$Kokkos_ROOT;$krepe_ROOT"
         cmake --build build --parallel "$(nproc)"
-        KOKKOS_TOOLS_LIBS="$kkf_ROOT/lib/libkkf.so" KOKKOS_TOOLS_ARGS=--kkf-dump-kernel-label=test_kernel ./build/test
+        KOKKOS_TOOLS_LIBS="$krepe_ROOT/lib/libkrepe.so" KOKKOS_TOOLS_ARGS=--krepe-dump-kernel-label=test_kernel ./build/test
         ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5
 
     - name: Show ccache statistics
