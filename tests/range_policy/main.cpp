@@ -10,9 +10,9 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  int factor = 3;
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", N, KOKKOS_LAMBDA(int i) { values(i) *= factor; });
+      "test_kernel", Kokkos::RangePolicy(0, N),
+      KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();
 
   auto h_values =

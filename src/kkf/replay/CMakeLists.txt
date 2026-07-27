@@ -17,6 +17,7 @@ function(kkf_add_kernel_replayer TARGET_NAME)
            host_allocation.hpp
            kernel_replayer.hpp
            memory_space_type.hpp
+           ../common/extended_lambda_utils.hpp
     PRIVATE FILE_SET
             common_headers
             TYPE

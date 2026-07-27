@@ -16,9 +16,8 @@ int main(int argc, char* argv[]) {
   const int N = 1024;
   Kokkos::View<int*> values;
 
-  Kokkos::parallel_for(
-      "test_kernel", N,
-      cexa::kernel_replayer::replay_functor(MultiplyFunctor{0, values}));
+  cexa::kernel_replayer::parallel_for("test_kernel", N,
+                                      MultiplyFunctor{0, values});
   Kokkos::fence();
 
   cexa::kernel_replayer::compare_views<int*>(

@@ -10,9 +10,20 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  int factor = 3;
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", N, KOKKOS_LAMBDA(int i) { values(i) *= factor; });
+      "test_kernel",
+      Kokkos::RangePolicy<Kokkos::IndexType<std::uint64_t>>(0, N),
+  // nvcc doesn't support generic host device lambdas
+#if !defined(KOKKOS_COMPILER_NVCC)
+      KOKKOS_LAMBDA(std::integral auto i) {
+        if (!std::is_same_v<decltype(i), std::uint64_t>) {
+          Kokkos::abort("Failed");
+        }
+#else
+      KOKKOS_LAMBDA(std::uint64_t i) {
+#endif
+        values(i) *= 2;
+      });
   Kokkos::fence();
 
   auto h_values =

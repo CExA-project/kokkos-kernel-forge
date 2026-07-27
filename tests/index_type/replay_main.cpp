@@ -12,7 +12,18 @@ int main(int argc, char* argv[]) {
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", 0, KOKKOS_LAMBDA(int i) { values(i) *= 2; });
+      "test_kernel", Kokkos::RangePolicy(0, 1),
+  // nvcc doesn't support generic host device lambdas
+#if !defined(KOKKOS_COMPILER_NVCC)
+      KOKKOS_LAMBDA(std::integral auto i) {
+        if (!std::is_same_v<decltype(i), std::uint64_t>) {
+          Kokkos::abort("Failed");
+        }
+#else
+      KOKKOS_LAMBDA(std::uint64_t i) {
+#endif
+        values(i) *= 2;
+      });
   Kokkos::fence();
 
   // auto h_values =

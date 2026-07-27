@@ -10,9 +10,14 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  int factor = 3;
+  auto policy = Kokkos::TeamPolicy(4, Kokkos::AUTO);
   cexa::kernel_replayer::parallel_for(
-      "test_kernel", N, KOKKOS_LAMBDA(int i) { values(i) *= factor; });
+      "test_kernel", policy, KOKKOS_LAMBDA(decltype(policy)::member_type team) {
+        Kokkos::parallel_for(
+            Kokkos::TeamVectorRange(team, team.league_rank() * 256,
+                                    (team.league_rank() + 1) * 256),
+            [&](int i) { values(i) *= team.team_size() + team.league_size(); });
+      });
   Kokkos::fence();
 
   auto h_values =

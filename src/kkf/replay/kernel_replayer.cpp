@@ -84,6 +84,31 @@ void device_init() {
 }
 
 static std::vector<char> functor_data;
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+static std::vector<char> nvcc_inner_lambda_data;
+
+namespace cexa::kernel_replayer::impl {
+void* copy_extended_lambda_inner_lambda(void* inner_lambda_ptr,
+                                        std::size_t inner_lambda_size) {
+  assert(inner_lambda_size == nvcc_inner_lambda_data.size());
+
+  void* inner_lambda_save = std::malloc(inner_lambda_size);
+  std::memcpy(inner_lambda_save, inner_lambda_ptr, inner_lambda_size);
+  std::memcpy(inner_lambda_ptr, nvcc_inner_lambda_data.data(),
+              inner_lambda_size);
+
+  return inner_lambda_save;
+}
+
+void restore_extended_lambda_inner_lambda(void* inner_lambda_ptr,
+                                          void* inner_lambda_save) {
+  std::memcpy(inner_lambda_ptr, inner_lambda_save,
+              nvcc_inner_lambda_data.size());
+  std::free(inner_lambda_save);
+}
+}  // namespace cexa::kernel_replayer::impl
+
+#endif
 
 namespace cexa::kernel_replayer {
 
@@ -145,7 +170,7 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
 void init_functor(char* buffer, std::size_t size) {
   if (functor_data.size() < size) {
     throw std::runtime_error(
-        "The stored functor is smaller then the requested functor, expected at "
+        "The stored functor is smaller than the requested functor, expected at "
         "most " +
         std::to_string(functor_data.size()) + "B, got " + std::to_string(size) +
         "B");
@@ -204,16 +229,57 @@ std::string get_hdf5_string_attribute(hid_t group, const char* name,
   return attribute;
 }
 
+int get_hdf5_int_attribute(hid_t group, const char* name,
+                           const char* attr_name) {
+  kkf::hdf5::ScopedHandle attr(
+      CHECK_HDF5_ID(
+          H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
+
+  H5A_info_t attr_info;
+  CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
+  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                               H5Tclose);
+  assert(attr_info.data_size == sizeof(int));
+  int attribute;
+  CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), &attribute));
+
+  type.close_checked();
+  attr.close_checked();
+
+  return attribute;
+}
+
+std::uint64_t get_hdf5_uint64_attribute(hid_t group, const char* name,
+                                        const char* attr_name) {
+  kkf::hdf5::ScopedHandle attr(
+      CHECK_HDF5_ID(
+          H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
+      H5Aclose);
+
+  H5A_info_t attr_info;
+  CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
+  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                               H5Tclose);
+  assert(attr_info.data_size == sizeof(std::uint64_t));
+  std::uint64_t attribute;
+  CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), &attribute));
+
+  type.close_checked();
+  attr.close_checked();
+
+  return attribute;
+}
+
+template <MemorySpaceType target_memory_space>
 herr_t get_hdf5_dataset_alloc_info(hid_t group, const char* name,
-                                   const H5L_info_t*, void* allocation_sets) {
-  std::string label = get_hdf5_string_attribute(group, name, "label");
+                                   const H5L_info_t*, void* allocation_set) {
   std::string space = get_hdf5_string_attribute(group, name, "space");
   char* address     = reinterpret_cast<char*>(std::stoull(
       get_hdf5_string_attribute(group, name, "p_data"), nullptr, 16));
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
-  if (memory_space == MemorySpaceType::HOST &&
-      label == "kernel_replayer_functor") {
+  if (memory_space != target_memory_space) {
     return 0;
   }
 
@@ -235,14 +301,10 @@ herr_t get_hdf5_dataset_alloc_info(hid_t group, const char* name,
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
 
   auto allocations = reinterpret_cast<std::set<std::pair<char*, std::size_t>>*>(
-      allocation_sets);
+      allocation_set);
   std::pair<char*, std::size_t> allocation_info =
       get_allocation_address(address, buffer_size, memory_space);
-  if (memory_space == MemorySpaceType::HOST) {
-    allocations[0].insert(allocation_info);
-  } else {
-    allocations[1].insert(allocation_info);
-  }
+  allocations->insert(allocation_info);
 
   return 0;
 }
@@ -296,21 +358,240 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
 
 void read_functor_from_hdf5(hid_t file) {
   int rank = 0;
-  CHECK_HDF5_CALL(H5LTget_dataset_ndims(file, "functor", &rank));
+  CHECK_HDF5_CALL(H5LTget_dataset_ndims(file, "functor/functor", &rank));
   assert(rank == 1);
 
   hsize_t dim = 0;
   H5T_class_t datatype;
   std::size_t datatype_size;
-  CHECK_HDF5_CALL(
-      H5LTget_dataset_info(file, "functor", &dim, &datatype, &datatype_size));
+  CHECK_HDF5_CALL(H5LTget_dataset_info(file, "functor/functor", &dim, &datatype,
+                                       &datatype_size));
   // We only deal with arrays of chars
   assert(datatype == H5T_INTEGER);
   assert(datatype_size == 1);
 
   functor_data.resize(dim);
+  CHECK_HDF5_CALL(H5LTread_dataset(file, "functor/functor", H5T_NATIVE_UCHAR,
+                                   functor_data.data()));
+
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
   CHECK_HDF5_CALL(
-      H5LTread_dataset(file, "functor", H5T_NATIVE_UCHAR, functor_data.data()));
+      H5LTget_dataset_ndims(file, "functor/nvcc_inner_lambda", &rank));
+  assert(rank == 1);
+
+  CHECK_HDF5_CALL(H5LTget_dataset_info(file, "functor/nvcc_inner_lambda", &dim,
+                                       &datatype, &datatype_size));
+  assert(datatype == H5T_INTEGER);
+  assert(datatype_size == 1);
+
+  nvcc_inner_lambda_data.resize(dim);
+  CHECK_HDF5_CALL(H5LTread_dataset(file, "functor/nvcc_inner_lambda",
+                                   H5T_NATIVE_UCHAR,
+                                   nvcc_inner_lambda_data.data()));
+#endif
+}
+
+std::vector<std::int64_t> read_hdf5_int64_dataset(hid_t root,
+                                                  const char* name) {
+  int dataset_rank = 0;
+  CHECK_HDF5_CALL(H5LTget_dataset_ndims(root, name, &dataset_rank));
+  assert(dataset_rank == 1);
+  hsize_t dim = 0;
+  H5T_class_t datatype;
+  std::size_t datatype_size;
+  CHECK_HDF5_CALL(
+      H5LTget_dataset_info(root, name, &dim, &datatype, &datatype_size));
+  assert(datatype == H5T_INTEGER);
+  assert(datatype_size == sizeof(std::int64_t));
+
+  std::vector<std::int64_t> res(dim);
+  CHECK_HDF5_CALL(H5LTread_dataset(root, name, H5T_NATIVE_INT64, res.data()));
+
+  return res;
+}
+
+index_type_var_t get_policy_index_type_from_props(bool index_type_signed,
+                                                  std::size_t index_type_size) {
+  if (index_type_signed) {
+    switch (index_type_size) {
+      case 1: return std::int8_t{};
+      case 2: return std::int16_t{};
+      case 4: return std::int32_t{};
+      case 8: return std::int64_t{};
+      default:
+        throw std::runtime_error("unexpected index type size " +
+                                 std::to_string(index_type_size));
+    }
+  } else {
+    switch (index_type_size) {
+      case 1: return std::uint8_t{};
+      case 2: return std::uint16_t{};
+      case 4: return std::uint32_t{};
+      case 8: return std::uint64_t{};
+      default:
+        throw std::runtime_error("unexpected index type size " +
+                                 std::to_string(index_type_size));
+    }
+  }
+}
+
+schedule_var_t get_policy_schedule_from_name(const std::string& schedule) {
+  if (schedule == "static") {
+    return Kokkos::Static{};
+  } else if (schedule == "dynamic") {
+    return Kokkos::Dynamic{};
+  } else {
+    throw std::runtime_error("Unexpected schedule type '" + schedule +
+                             "' found in the dump");
+  }
+}
+
+exec_space_var_t get_policy_exec_space_from_name(const std::string& space) {
+#if defined(KOKKOS_ENABLE_SERIAL)
+  if (space == "Serial") {
+    return ExecSpaceTag<Kokkos::Serial>{};
+  }
+#endif
+#if defined(KOKKOS_ENABLE_OPENMP)
+  if (space == "OpenMP") {
+    return ExecSpaceTag<Kokkos::OpenMP>{};
+  }
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+  if (space == "Threads") {
+    return ExecSpaceTag<Kokkos::Threads>{};
+  }
+#endif
+#if defined(KOKKOS_ENABLE_HPX)
+  if (space == "HPX") {
+    return ExecSpaceTag<Kokkos::HPX>{};
+  }
+#endif
+#if defined(KOKKOS_ENABLE_CUDA)
+  if (space == "Cuda") {
+    return ExecSpaceTag<Kokkos::Cuda>{};
+  }
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+  if (space == "HIP") {
+    return ExecSpaceTag<Kokkos::HIP>{};
+  }
+#endif
+  throw std::runtime_error("No enabled execution space corresponds to " +
+                           space);
+}
+
+void read_policy_from_hdf5(hid_t file) {
+  std::string type = get_hdf5_string_attribute(file, "policy", "type");
+
+  replay_policy = std::make_unique<policy_var_t>();
+
+  if (type == "none") {
+    return;
+  }
+
+  if (type == "scalar") {
+    *replay_policy =
+        ScalarPolicyDesc{get_hdf5_uint64_attribute(file, "policy", "end")};
+    return;
+  }
+
+  const int index_type_signed =
+      get_hdf5_int_attribute(file, "policy", "index_type_signed");
+  const int index_type_size =
+      get_hdf5_int_attribute(file, "policy", "index_type_size");
+
+  const index_type_var_t index_type =
+      get_policy_index_type_from_props(index_type_signed, index_type_size);
+
+  const std::string exec_space_name =
+      get_hdf5_string_attribute(file, "policy", "space");
+  const exec_space_var_t exec_space =
+      get_policy_exec_space_from_name(exec_space_name);
+
+  const std::string schedule_name =
+      get_hdf5_string_attribute(file, "policy", "schedule");
+  const schedule_var_t schedule = get_policy_schedule_from_name(schedule_name);
+
+  if (type == "range") {
+    const std::uint64_t begin =
+        get_hdf5_uint64_attribute(file, "policy", "begin");
+    const std::uint64_t end = get_hdf5_uint64_attribute(file, "policy", "end");
+    const int chunk_size = get_hdf5_int_attribute(file, "policy", "chunk_size");
+    *replay_policy       = RangePolicyDesc{begin,      end,      chunk_size,
+                                     index_type, schedule, exec_space};
+  } else if (type == "mdrange") {
+    mdrange_rank_var_t policy_rank;
+    const int rank = get_hdf5_int_attribute(file, "policy", "rank");
+    switch (rank) {
+#if KOKKOS_VERSION_GREATER_EQUAL(5, 2, 0)
+      case 1: policy_rank = std::integral_constant<int, 1>{}; break;
+#endif
+      case 2: policy_rank = std::integral_constant<int, 2>{}; break;
+      case 3: policy_rank = std::integral_constant<int, 3>{}; break;
+      case 4: policy_rank = std::integral_constant<int, 4>{}; break;
+      case 5: policy_rank = std::integral_constant<int, 5>{}; break;
+      case 6: policy_rank = std::integral_constant<int, 6>{}; break;
+      default:
+        throw std::runtime_error("Unexpected mdrange policy rank " +
+                                 std::to_string(rank));
+    }
+
+    Kokkos::Iterate outer_dir;
+    const std::string outer_dir_name =
+        get_hdf5_string_attribute(file, "policy", "outer_dir");
+    if (outer_dir_name == "left") {
+      outer_dir = Kokkos::Iterate::Left;
+    } else if (outer_dir_name == "right") {
+      outer_dir = Kokkos::Iterate::Right;
+    } else {
+      throw std::runtime_error("Unexpected iteration pattern '" +
+                               outer_dir_name + "'");
+    }
+
+    Kokkos::Iterate inner_dir;
+    const std::string inner_dir_name =
+        get_hdf5_string_attribute(file, "policy", "inner_dir");
+    if (inner_dir_name == "left") {
+      inner_dir = Kokkos::Iterate::Left;
+    } else if (inner_dir_name == "right") {
+      inner_dir = Kokkos::Iterate::Right;
+    } else {
+      throw std::runtime_error("Unexpected iteration pattern '" +
+                               inner_dir_name + "'");
+    }
+
+    std::vector<std::int64_t> begin =
+        read_hdf5_int64_dataset(file, "policy/begin");
+    std::vector<std::int64_t> end = read_hdf5_int64_dataset(file, "policy/end");
+    std::vector<std::int64_t> tile =
+        read_hdf5_int64_dataset(file, "policy/tile");
+
+    *replay_policy = MDRangePolicyDesc{begin,       end,       tile,
+                                       index_type,  schedule,  exec_space,
+                                       policy_rank, outer_dir, inner_dir};
+  } else if (type == "team") {
+    const int team_size = get_hdf5_int_attribute(file, "policy", "team_size");
+    const int league_size =
+        get_hdf5_int_attribute(file, "policy", "league_size");
+    const int vector_length =
+        get_hdf5_int_attribute(file, "policy", "vector_length");
+    const int team_scratch_0 =
+        get_hdf5_int_attribute(file, "policy", "team_scratch_0");
+    const int team_scratch_1 =
+        get_hdf5_int_attribute(file, "policy", "team_scratch_1");
+    const int thread_scratch_0 =
+        get_hdf5_int_attribute(file, "policy", "thread_scratch_0");
+    const int thread_scratch_1 =
+        get_hdf5_int_attribute(file, "policy", "thread_scratch_1");
+    const int chunk_size = get_hdf5_int_attribute(file, "policy", "chunk_size");
+    *replay_policy       = TeamPolicyDesc{
+        team_size,      league_size,      vector_length,    team_scratch_0,
+        team_scratch_1, thread_scratch_0, thread_scratch_1, chunk_size,
+        index_type,     schedule,         exec_space};
+  } else {
+    throw std::runtime_error("Unknown policy type '" + type + "'");
+  }
 }
 
 std::vector<std::pair<char*, std::size_t>> compute_allocations(
@@ -341,8 +622,6 @@ std::vector<std::pair<char*, std::size_t>> compute_allocations(
 }  // namespace impl
 
 ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
-  device_init();
-
   std::string_view hdf5_filename =
       find_flag_argument(argc, argv, "--kernel-replayer-dump");
   if (hdf5_filename.data() == nullptr) {
@@ -353,18 +632,33 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   kkf::hdf5::ScopedHandle file(
       CHECK_HDF5_ID(H5Fopen(hdf5_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
       H5Fclose);
-  std::set<std::pair<char*, std::size_t>> allocation_sets[2];
+
+  std::set<std::pair<char*, std::size_t>> host_allocation_locs;
 
   hsize_t idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
       file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-      impl::get_hdf5_dataset_alloc_info, allocation_sets, H5P_DEFAULT));
+      impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::HOST>,
+      &host_allocation_locs, H5P_DEFAULT));
 
-  for (auto [address, size] : impl::compute_allocations(allocation_sets[0])) {
+  for (auto [address, size] : impl::compute_allocations(host_allocation_locs)) {
     allocate(impl::MemorySpaceType::HOST, address, size);
   }
 
-  for (auto [address, size] : impl::compute_allocations(allocation_sets[1])) {
+  // initializing the device driver apis might allocate heap memory, that's why
+  // we do it after doing the host allocations
+  device_init();
+
+  std::set<std::pair<char*, std::size_t>> device_allocation_locs;
+
+  idx = 0;
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::DEVICE>,
+      &device_allocation_locs, H5P_DEFAULT));
+
+  for (auto [address, size] :
+       impl::compute_allocations(device_allocation_locs)) {
     allocate(impl::MemorySpaceType::DEVICE, address, size);
   }
 
@@ -394,6 +688,8 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
                          &idx, impl::read_hdf5_metadata, nullptr, H5P_DEFAULT));
 
   impl::read_functor_from_hdf5(file.get());
+
+  impl::read_policy_from_hdf5(file.get());
 
   file.close_checked();
 

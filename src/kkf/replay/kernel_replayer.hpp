@@ -1,15 +1,29 @@
 #pragma once
 
+#include <cassert>
+#include <concepts>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <variant>
+#include <tuple>
 #include <Kokkos_Core.hpp>
 #include "allocation.hpp"
+#include <kkf/common/extended_lambda_utils.hpp>
 
 namespace cexa::kernel_replayer {
 namespace impl {
+
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+void* copy_extended_lambda_inner_lambda(void* inner_lambda_ptr,
+                                        std::size_t inner_lambda_size);
+void restore_extended_lambda_inner_lambda(void* inner_lambda_ptr,
+                                          void* inner_lambda_save);
+#endif
+
 void init_functor(char* buffer, std::size_t size);
 void* get_allocation(impl::MemorySpaceType memory_space,
                      const std::string& label);
@@ -22,6 +36,369 @@ struct add_unmanaged_trait;
 template <unsigned int N>
 struct add_unmanaged_trait<Kokkos::MemoryTraits<N>> {
   using type = Kokkos::MemoryTraits<N | Kokkos::Unmanaged>;
+};
+
+template <class Policy>
+struct ForcePolicy {
+  Policy policy;
+};
+
+template <class Policy>
+constexpr bool is_force_policy_v = false;
+
+template <class Policy>
+constexpr bool is_force_policy_v<ForcePolicy<Policy>> = true;
+
+// Variant which is visited at runtime to handle the compile time index type of
+// execution policies
+using index_type_var_t =
+    std::variant<std::int8_t, std::uint8_t, std::int16_t, std::uint16_t,
+                 std::int32_t, std::uint32_t, std::int64_t, std::uint64_t>;
+
+// Variant which is visited at runtime to handle the compile time scheduling
+// policy of execution policies
+using schedule_var_t = std::variant<Kokkos::Static, Kokkos::Dynamic>;
+
+// NOTE: We don't use execution space instances in the variant since we need to
+// initialize it before Kokkos is initalized
+template <class Space>
+struct ExecSpaceTag {
+  using space = Space;
+};
+
+// Variant which is visited at runtime to handle the execution space of the
+// execution policies
+using exec_space_var_t = std::variant<std::monostate
+#if defined(KOKKOS_ENABLE_SERIAL)
+                                      ,
+                                      ExecSpaceTag<Kokkos::Serial>
+#endif
+#if defined(KOKKOS_ENABLE_OPENMP)
+                                      ,
+                                      ExecSpaceTag<Kokkos::OpenMP>
+#endif
+#if defined(KOKKOS_ENABLE_THREADS)
+                                      ,
+                                      ExecSpaceTag<Kokkos::Threads>
+#endif
+#if defined(KOKKOS_ENABLE_HPX)
+                                      ,
+                                      ExecSpaceTag<Kokkos::HPX>
+#endif
+#if defined(KOKKOS_ENABLE_CUDA)
+                                      ,
+                                      ExecSpaceTag<Kokkos::Cuda>
+#endif
+#if defined(KOKKOS_ENABLE_HIP)
+                                      ,
+                                      ExecSpaceTag<Kokkos::HIP>
+#endif
+                                      >;
+
+// Variant which is visited at runtime to handle the compile time rank of
+// MDRangePolicy
+using mdrange_rank_var_t = std::variant<
+#if KOKKOS_VERSION_GREATER_EQUAL(5, 2, 0)
+    std::integral_constant<int, 1>,
+#endif
+    std::integral_constant<int, 2>, std::integral_constant<int, 3>,
+    std::integral_constant<int, 4>, std::integral_constant<int, 5>,
+    std::integral_constant<int, 6>>;
+
+struct ScalarPolicyDesc {
+  std::size_t N;
+};
+
+struct RangePolicyDesc {
+  std::uint64_t begin;
+  std::uint64_t end;
+  int chunk_size;
+  index_type_var_t index_type;
+  schedule_var_t schedule;
+  exec_space_var_t exec_space;
+};
+
+struct MDRangePolicyDesc {
+  std::vector<std::int64_t> begin;
+  std::vector<std::int64_t> end;
+  std::vector<std::int64_t> tile;
+  index_type_var_t index_type;
+  schedule_var_t schedule;
+  exec_space_var_t exec_space;
+  mdrange_rank_var_t rank;
+  Kokkos::Iterate outer_iter_dir;
+  Kokkos::Iterate inner_iter_dir;
+};
+
+struct TeamPolicyDesc {
+  int team_size;
+  int league_size;
+  int vector_length;
+  int team_scratch_0;
+  int team_scratch_1;
+  int thread_scratch_0;
+  int thread_scratch_1;
+  int chunk_size;
+  index_type_var_t index_type;
+  schedule_var_t schedule;
+  exec_space_var_t exec_space;
+};
+
+using policy_var_t =
+    std::variant<std::monostate, ScalarPolicyDesc, RangePolicyDesc,
+                 MDRangePolicyDesc, TeamPolicyDesc>;
+inline std::unique_ptr<policy_var_t> replay_policy;
+
+template <class ExecSpace, class Schedule, class IndexType>
+auto get_range_policy(const IndexType& start, const IndexType& end,
+                      int chunk_size) {
+  return Kokkos::RangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                             Kokkos::IndexType<IndexType>>(
+      start, end, Kokkos::ChunkSize(chunk_size));
+}
+
+template <int rank, Kokkos::Iterate outer_dir, Kokkos::Iterate inner_dir,
+          class ExecSpace, class Schedule, class IndexType>
+auto get_mdrange_policy(const std::vector<std::int64_t>& start,
+                        const std::vector<std::int64_t>& end,
+                        const std::vector<std::int64_t>& tile) {
+  Kokkos::Array<std::int64_t, rank> start_arr;
+  Kokkos::Array<std::int64_t, rank> end_arr;
+  Kokkos::Array<std::int64_t, rank> tile_arr;
+  for (int i = 0; i < rank; i++) {
+    start_arr[i] = start[i];
+    end_arr[i]   = end[i];
+    tile_arr[i]  = tile[i];
+  }
+  // TODO: handle iteration patterns
+  return Kokkos::MDRangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                               Kokkos::IndexType<IndexType>,
+                               Kokkos::Rank<rank, outer_dir, inner_dir>>(
+      start_arr, end_arr, tile_arr);
+}
+
+template <class ExecSpace, class Schedule, class IndexType>
+auto get_team_policy(int team_size, int league_size, int vector_length,
+                     int team_scratch_0, int team_scratch_1,
+                     int thread_scratch_0, int thread_scratch_1,
+                     int chunk_size) {
+  using Policy = Kokkos::TeamPolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                                    Kokkos::IndexType<IndexType>>;
+  Policy policy;
+  if (team_size < 0) {
+    if (vector_length < 0) {
+      policy = Policy(league_size, Kokkos::AUTO, Kokkos::AUTO);
+    } else {
+      policy = Policy(league_size, Kokkos::AUTO, vector_length);
+    }
+  } else {
+    if (vector_length < 0) {
+      policy = Policy(league_size, team_size, Kokkos::AUTO);
+    } else {
+      policy = Policy(league_size, team_size, vector_length);
+    }
+  }
+  // FIXME: querying the scratch size is not supported on all backends for some
+  // versions of Kokkos, we pass -1 to indicate that
+  if (team_scratch_0 != -1) {
+    policy.set_scratch_size(0, Kokkos::PerTeam(team_scratch_0),
+                            Kokkos::PerThread(thread_scratch_0));
+    policy.set_scratch_size(1, Kokkos::PerTeam(team_scratch_1),
+                            Kokkos::PerThread(thread_scratch_1));
+  }
+  policy.set_chunk_size(chunk_size);
+  return policy;
+}
+
+// NOTE: Since we resolve the rank using a variant, when calling visit, the
+// compiler will instantiate the parallel_for call with every possible rank,
+// which is why we wrap the functor with a functor able to take 1 to 6
+// arguments.
+template <class Functor>
+struct MDFunctorWrapper {
+  Functor f;
+
+  MDFunctorWrapper(Functor f) : f(f) {}
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0) const {
+    if constexpr (requires(Functor f) { f(0); }) {
+      f(i0);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0,
+                                              IndexType i1) const {
+    if constexpr (requires(Functor f) { f(0, 0); }) {
+      f(i0, i1);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0); }) {
+      f(i0, i1, i2);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2,
+                                              IndexType i3) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0, 0); }) {
+      f(i0, i1, i2, i3);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2, IndexType i3,
+                                              IndexType i4) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0, 0, 0); }) {
+      f(i0, i1, i2, i3, i4);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <std::integral IndexType>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
+                                              IndexType i2, IndexType i3,
+                                              IndexType i4,
+                                              IndexType i5) const {
+    if constexpr (requires(Functor f) { f(0, 0, 0, 0, 0, 0); }) {
+      f(i0, i1, i2, i3, i4, i5);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+
+  template <class TeamMember>
+    requires Kokkos::is_team_handle_v<TeamMember>
+  KOKKOS_FORCEINLINE_FUNCTION void operator()(const TeamMember& team) const {
+    if constexpr (requires(Functor f, TeamMember t) { f(t); }) {
+      f(team);
+      return;
+    }
+    KOKKOS_ASSERT(false);
+  }
+};
+
+template <class Functor>
+struct ParallelForVisitor {
+  const std::string& label;
+  // We need to use the wrapper even with RangePolicy, as when replaying
+  // an MDRangePolicy the compiler will try to compile the scalar and
+  // RangePolicy overloads with a functor taking multiple arguments
+  MDFunctorWrapper<Functor> functor;
+
+  ParallelForVisitor(const std::string& label, const Functor& functor)
+      : label(label), functor(functor) {}
+
+  void operator()(std::monostate) const {
+    throw std::runtime_error(
+        "Trying to use a replay parallel_for but the replay dump does not "
+        "contain an execution policy");
+  }
+
+  void operator()(const ScalarPolicyDesc& policy) const {
+    Kokkos::parallel_for(label, policy.N, functor);
+  }
+
+  void operator()(const RangePolicyDesc& policy) const {
+    std::visit(
+        [&]<class IndexType, class Schedule, class ExecSpaceTag>(
+            IndexType, Schedule, ExecSpaceTag) {
+          if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+            IndexType begin, end;
+            if constexpr (std::is_signed_v<IndexType>) {
+              begin = Kokkos::bit_cast<std::int64_t>(policy.begin);
+              end   = Kokkos::bit_cast<std::int64_t>(policy.end);
+            } else {
+              begin = policy.begin;
+              end   = policy.end;
+            }
+            Kokkos::parallel_for(
+                label,
+                impl::get_range_policy<typename ExecSpaceTag::space, Schedule,
+                                       IndexType>(begin, end,
+                                                  policy.chunk_size),
+                functor);
+          }
+        },
+        policy.index_type, policy.schedule, policy.exec_space);
+  }
+
+  void operator()(const MDRangePolicyDesc& policy) const {
+    std::visit(
+        [&]<int rank, class IndexType, class Schedule, class ExecSpaceTag>(
+            std::integral_constant<int, rank>, IndexType, Schedule,
+            ExecSpaceTag) {
+          if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+            using enum Kokkos::Iterate;
+            // We don't use a variant for the iteration pattern as adding
+            // variants to the visit call has a noticeable impact on compile
+            // times.
+            if (policy.outer_iter_dir == Right) {
+              if (policy.inner_iter_dir == Right) {
+                auto p = impl::get_mdrange_policy<rank, Right, Right,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              } else {
+                auto p = impl::get_mdrange_policy<rank, Right, Left,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              }
+            } else {  // Left
+              if (policy.inner_iter_dir == Right) {
+                auto p = impl::get_mdrange_policy<rank, Left, Right,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              } else {  // Left
+                auto p = impl::get_mdrange_policy<rank, Left, Left,
+                                                  typename ExecSpaceTag::space,
+                                                  Schedule, IndexType>(
+                    policy.begin, policy.end, policy.tile);
+                Kokkos::parallel_for(label, p, functor);
+              }
+            }
+          }
+        },
+        policy.rank, policy.index_type, policy.schedule, policy.exec_space);
+  }
+
+  void operator()(const TeamPolicyDesc& policy) const {
+    std::visit(
+        [&]<class IndexType, class Schedule, class ExecSpaceTag>(
+            IndexType, Schedule, ExecSpaceTag) {
+          if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+            auto p = impl::get_team_policy<typename ExecSpaceTag::space,
+                                           Schedule, IndexType>(
+                policy.team_size, policy.league_size, policy.vector_length,
+                policy.team_scratch_0, policy.team_scratch_1,
+                policy.thread_scratch_0, policy.thread_scratch_1,
+                policy.chunk_size);
+            Kokkos::parallel_for(label, p, functor);
+          }
+        },
+        policy.index_type, policy.schedule, policy.exec_space);
+  }
 };
 }  // namespace impl
 
@@ -127,28 +504,72 @@ Functor replay_functor(const Functor& functor) {
   // - return f
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_disable();
 
-  void* tmp_buffer         = std::aligned_alloc(alignof(Functor), N);
-  Functor* tmp_functor     = new (tmp_buffer) Functor(functor);
-  void* tmp_functor_buffer = std::malloc(N);
-  std::memcpy(tmp_functor_buffer, tmp_buffer, N);
+  void* dummy_functor_storage = std::aligned_alloc(alignof(Functor), N);
+  Functor* dummy_functor      = new (dummy_functor_storage) Functor(functor);
+  void* dummy_functor_buffer_save = std::malloc(N);
+  std::memcpy(dummy_functor_buffer_save, dummy_functor_storage, N);
 
-  std::size_t copy_length = N;
-#if defined(KOKKOS_COMPILER_NVCC)
-  // extended lambdas on nvcc also have a "data" pointer
-  if constexpr (__nv_is_extended_host_device_lambda_closure_type(Functor)) {
-    copy_length -= sizeof(void*);
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+  [[maybe_unused]] void* inner_lambda_ptr  = nullptr;
+  [[maybe_unused]] void* inner_lambda_save = nullptr;
+  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+    impl::init_functor(static_cast<char*>(dummy_functor_storage),
+                       N - sizeof(void*));
+    inner_lambda_ptr  = kkf::hdl_utils::hdl_host_lambda_pointer(*dummy_functor);
+    inner_lambda_save = impl::copy_extended_lambda_inner_lambda(
+        inner_lambda_ptr, kkf::hdl_utils::hdl_host_lambda_size(*dummy_functor));
+  } else
+#endif
+  {
+    impl::init_functor(static_cast<char*>(dummy_functor_storage), N);
+  }
+  Functor f(*dummy_functor);
+
+  std::memcpy(dummy_functor_storage, dummy_functor_buffer_save, N);
+  std::free(dummy_functor_buffer_save);
+#if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
+  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+    impl::restore_extended_lambda_inner_lambda(inner_lambda_ptr,
+                                               inner_lambda_save);
   }
 #endif
-  impl::init_functor(static_cast<char*>(tmp_buffer), copy_length);
-  Functor f(*tmp_functor);
-
-  std::memcpy(tmp_buffer, tmp_functor_buffer, N);
-  std::free(tmp_functor_buffer);
-  tmp_functor->~Functor();
-  std::free(tmp_buffer);
+  dummy_functor->~Functor();
+  std::free(dummy_functor_storage);
 
   Kokkos::Impl::SharedAllocationRecord<void, void>::tracking_enable();
 
   return f;
+}
+
+/**
+ * @brief Wraps an execution policy and allows to override the saved one in a
+ * parallel_for.
+ */
+template <class Policy>
+impl::ForcePolicy<Policy> force_policy(Policy&& policy) {
+  return impl::ForcePolicy{policy};
+}
+
+/**
+ * @brief Replays a parallel_for using the execution policy and functors stored
+ * in a replay dump.
+ *
+ * @param label A label forwarded to the underlying Kokkos::parallel_for
+ * @param p The policy to use, if it is `force_policy(other_policy)` then
+ * `other_policy` will be used, otherwise this parameter will be ignored and the
+ * policy stored in the replay dump will be used
+ * @param functor A functor with the same signature and the same captures as the
+ * functor to replay, its operator() will be used but its data will be replaced
+ * by the one stored in the replay dump
+ */
+template <class Policy, class Functor>
+void parallel_for(const std::string& label, [[maybe_unused]] const Policy& p,
+                  Functor&& functor) {
+  if constexpr (impl::is_force_policy_v<Policy>) {
+    Kokkos::parallel_for(label, p.policy, replay_functor(functor));
+  } else {
+    std::visit(impl::ParallelForVisitor{label, replay_functor(functor)},
+               *impl::replay_policy);
+  }
 }
 }  // namespace cexa::kernel_replayer
