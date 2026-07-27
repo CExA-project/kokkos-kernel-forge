@@ -4,7 +4,7 @@ set(TEST_LAUNCHER "${CMAKE_CURRENT_LIST_DIR}/launcher.sh")
 
 # CTest is unreliable through the Slurm launcher on Ruche. These targets run
 # the same replay tests inside a single Slurm allocation.
-add_custom_target(kkf_run_replay_tests)
+add_custom_target(krepe_run_replay_tests)
 
 function(add_replay_test TEST_NAME COMPARE_OUTPUT)
   set(TEST_WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/work/${TEST_NAME}")
@@ -16,7 +16,7 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
     set(COMPARE_OUTPUT FALSE)
   endif()
 
-  set(TEST_COMMAND "${TEST_LAUNCHER}" "$<TARGET_FILE:kkf_kokkos_hooks>" "$<TARGET_FILE:${TEST_NAME}>"
+  set(TEST_COMMAND "${TEST_LAUNCHER}" "$<TARGET_FILE:krepe_kokkos_hooks>" "$<TARGET_FILE:${TEST_NAME}>"
                    "$<TARGET_FILE:${TEST_NAME}_replay>" "${COMPARE_OUTPUT}" ${ARGN}
   )
 
@@ -27,12 +27,12 @@ function(add_replay_test TEST_NAME COMPARE_OUTPUT)
   set_tests_properties("${TEST_NAME}" PROPERTIES LABELS "replay;sanitizer_compatible")
 
   add_custom_target(
-    "kkf_run_${TEST_NAME}"
+    "krepe_run_${TEST_NAME}"
     COMMAND ${TEST_COMMAND}
     WORKING_DIRECTORY "${TEST_WORKING_DIRECTORY}"
     USES_TERMINAL VERBATIM
   )
-  add_dependencies(kkf_run_replay_tests "kkf_run_${TEST_NAME}")
+  add_dependencies(krepe_run_replay_tests "krepe_run_${TEST_NAME}")
 endfunction()
 
 add_subdirectory(no_capture)

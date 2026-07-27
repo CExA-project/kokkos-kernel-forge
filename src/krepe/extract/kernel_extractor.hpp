@@ -4,9 +4,9 @@
 #include <cstdint>
 #include <string>
 #include <Kokkos_Core.hpp>
-#include <kkf/common/extended_lambda_utils.hpp>
+#include <krepe/common/extended_lambda_utils.hpp>
 
-namespace cexa::kernel_replayer {
+namespace krepe::kernel_replayer {
 namespace impl {
 struct scratch_description {
   int level0;
@@ -165,12 +165,12 @@ void register_bounds(const Kokkos::TeamPolicy<Args...>& policy) {
 template <class Functor>
 Functor replay_functor(Functor&& functor) {
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
-  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+  if constexpr (krepe::hdl_utils::lambda_is_hdl<Functor>()) {
     impl::copy_functor(reinterpret_cast<const unsigned char*>(&functor),
                        sizeof(functor),
                        reinterpret_cast<const unsigned char*>(
-                           kkf::hdl_utils::hdl_host_lambda_pointer(functor)),
-                       kkf::hdl_utils::hdl_host_lambda_size(functor));
+                           krepe::hdl_utils::hdl_host_lambda_pointer(functor)),
+                       krepe::hdl_utils::hdl_host_lambda_size(functor));
   } else
 #endif
   {
@@ -195,4 +195,4 @@ void parallel_for(const std::string& label, const Policy& policy,
 }
 
 void add_metadata(const std::string& key, const std::string& value);
-}  // namespace cexa::kernel_replayer
+}  // namespace krepe::kernel_replayer

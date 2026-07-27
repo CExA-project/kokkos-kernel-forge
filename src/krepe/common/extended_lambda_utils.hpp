@@ -37,7 +37,7 @@
 #define KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND
 #endif
 
-namespace kkf::hdl_utils {
+namespace krepe::hdl_utils {
 // Before the host compilation phase, nvcc will try to instantiate the function
 // with a regular lambda type, but we don't expect it to be called at runtime as
 // the specialization will be used by the host compiler once cudafe++ generates
@@ -83,4 +83,4 @@ constexpr bool lambda_is_hdl() {
 #endif
 }
 
-}  // namespace kkf::hdl_utils
+}  // namespace krepe::hdl_utils

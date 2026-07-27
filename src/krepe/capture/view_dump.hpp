@@ -9,7 +9,7 @@
 #include <variant>
 #include <vector>
 
-namespace kkf {
+namespace krepe {
 
 struct ViewDumpResult {
   bool ok = false;
@@ -68,10 +68,10 @@ ViewDumpResult dump_view_snapshot(
     const std::vector<unsigned char>& functor_data,
     const std::vector<unsigned char>& nvcc_inner_lambda_data,
     const std::unordered_map<std::string, std::string>& metadata,
-    const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
-                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc,
-                       kkf::TeamPolicyDesc>& policy,
+    const std::variant<krepe::NoPolicyDesc, krepe::ScalarPolicyDesc,
+                       krepe::RangePolicyDesc, krepe::MDRangePolicyDesc,
+                       krepe::TeamPolicyDesc>& policy,
     std::string_view phase, std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation);
 
-}  // namespace kkf
+}  // namespace krepe

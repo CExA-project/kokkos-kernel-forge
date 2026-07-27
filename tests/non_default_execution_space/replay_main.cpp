@@ -1,9 +1,9 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/replayer.hpp>
+#include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   using exec_space   = Kokkos::DefaultHostExecutionSpace;
@@ -13,14 +13,14 @@ int main(int argc, char* argv[]) {
   // Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  cexa::kernel_replayer::parallel_for(
+  krepe::kernel_replayer::parallel_for(
       "test_kernel", Kokkos::RangePolicy<exec_space>(0, 1),
       KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();
 
   // Kokkos::printf("values(5) = %d\n", values(5));
 
-  cexa::kernel_replayer::compare_views<int*, memory_space>(
+  krepe::kernel_replayer::compare_views<int*, memory_space>(
       "values", std::make_tuple(1024), [](auto ref_values, auto replay_values) {
         for (int i = 0; i < N; i++) {
           if (replay_values(i) != ref_values(i)) {

@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/extractor.hpp>
+#include <krepe/extractor.hpp>
 
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   auto policy = Kokkos::TeamPolicy(4, Kokkos::AUTO);
-  cexa::kernel_replayer::parallel_for(
+  krepe::kernel_replayer::parallel_for(
       "test_kernel", policy, KOKKOS_LAMBDA(decltype(policy)::member_type team) {
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team, team.league_rank() * 256,

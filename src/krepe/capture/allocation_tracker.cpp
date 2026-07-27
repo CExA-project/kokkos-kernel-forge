@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace kkf {
+namespace krepe {
 
 void AllocationTracker::record_allocation(std::string label, std::string space,
                                           const void* ptr, const void* p_data,
@@ -47,4 +47,4 @@ AllocationSnapshot AllocationTracker::snapshot() const {
   return snapshot;
 }
 
-}  // namespace kkf
+}  // namespace krepe

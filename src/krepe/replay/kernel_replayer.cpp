@@ -13,7 +13,7 @@
 #include <hdf5_hl.h>
 
 #include "kernel_replayer.hpp"
-#include "kkf/common/hdf5_utils.hpp"
+#include "krepe/common/hdf5_utils.hpp"
 #include "allocation.hpp"
 #include "memory_space_type.hpp"
 
@@ -87,7 +87,7 @@ static std::vector<char> functor_data;
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
 static std::vector<char> nvcc_inner_lambda_data;
 
-namespace cexa::kernel_replayer::impl {
+namespace krepe::kernel_replayer::impl {
 void* copy_extended_lambda_inner_lambda(void* inner_lambda_ptr,
                                         std::size_t inner_lambda_size) {
   assert(inner_lambda_size == nvcc_inner_lambda_data.size());
@@ -106,11 +106,11 @@ void restore_extended_lambda_inner_lambda(void* inner_lambda_ptr,
               nvcc_inner_lambda_data.size());
   std::free(inner_lambda_save);
 }
-}  // namespace cexa::kernel_replayer::impl
+}  // namespace krepe::kernel_replayer::impl
 
 #endif
 
-namespace cexa::kernel_replayer {
+namespace krepe::kernel_replayer {
 
 namespace impl {
 
@@ -209,15 +209,15 @@ using hdf5_iterate_fun_t = std::function<void(std::string, std::string_view,
 
 std::string get_hdf5_string_attribute(hid_t group, const char* name,
                                       const char* attr_name) {
-  kkf::hdf5::ScopedHandle attr(
+  krepe::hdf5::ScopedHandle attr(
       CHECK_HDF5_ID(
           H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
       H5Aclose);
 
   H5A_info_t attr_info;
   CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
-  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
-                               H5Tclose);
+  krepe::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                                 H5Tclose);
   std::string attribute(attr_info.data_size, '\0');
   CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), attribute.data()));
 
@@ -231,15 +231,15 @@ std::string get_hdf5_string_attribute(hid_t group, const char* name,
 
 int get_hdf5_int_attribute(hid_t group, const char* name,
                            const char* attr_name) {
-  kkf::hdf5::ScopedHandle attr(
+  krepe::hdf5::ScopedHandle attr(
       CHECK_HDF5_ID(
           H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
       H5Aclose);
 
   H5A_info_t attr_info;
   CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
-  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
-                               H5Tclose);
+  krepe::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                                 H5Tclose);
   assert(attr_info.data_size == sizeof(int));
   int attribute;
   CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), &attribute));
@@ -252,15 +252,15 @@ int get_hdf5_int_attribute(hid_t group, const char* name,
 
 std::uint64_t get_hdf5_uint64_attribute(hid_t group, const char* name,
                                         const char* attr_name) {
-  kkf::hdf5::ScopedHandle attr(
+  krepe::hdf5::ScopedHandle attr(
       CHECK_HDF5_ID(
           H5Aopen_by_name(group, name, attr_name, H5P_DEFAULT, H5P_DEFAULT)),
       H5Aclose);
 
   H5A_info_t attr_info;
   CHECK_HDF5_CALL(H5Aget_info(attr.get(), &attr_info));
-  kkf::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
-                               H5Tclose);
+  krepe::hdf5::ScopedHandle type(CHECK_HDF5_ID(H5Aget_type(attr.get())),
+                                 H5Tclose);
   assert(attr_info.data_size == sizeof(std::uint64_t));
   std::uint64_t attribute;
   CHECK_HDF5_CALL(H5Aread(attr.get(), type.get(), &attribute));
@@ -629,7 +629,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
         "The kernel replayer expects the flag --kernel-replayer-dump");
   }
 
-  kkf::hdf5::ScopedHandle file(
+  krepe::hdf5::ScopedHandle file(
       CHECK_HDF5_ID(H5Fopen(hdf5_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
       H5Fclose);
 
@@ -696,7 +696,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
   std::string_view hdf5_output_filename =
       find_flag_argument(argc, argv, "--kernel-replayer-out-dump");
   if (hdf5_output_filename.data() != nullptr) {
-    kkf::hdf5::ScopedHandle output_file(
+    krepe::hdf5::ScopedHandle output_file(
         CHECK_HDF5_ID(
             H5Fopen(hdf5_output_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
         H5Fclose);
@@ -765,4 +765,4 @@ void ScopeGuard::allocate_output(std::string label,
   }
 }
 
-}  // namespace cexa::kernel_replayer
+}  // namespace krepe::kernel_replayer

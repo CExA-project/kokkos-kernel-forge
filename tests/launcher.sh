@@ -7,7 +7,7 @@ if [ $# -lt 3 ]; then
   exit 1
 fi
 
-LIBKKF_PATH=$1
+LIBKREPE_PATH=$1
 EXECUTABLE=$2
 REPLAY_EXECUTABLE=$3
 COMPARE_OUTPUT=0
@@ -34,14 +34,14 @@ clean_exit() {
 # TODO: Make output comparison less dependent on Kokkos/runtime log formatting.
 # Prefer comparing only stable test result lines instead of filtering known log noise.
 clean_output() {
-  grep -vF -- "[kkf-capture]" "$1" \
+  grep -vF -- "[krepe-capture]" "$1" \
     | grep -vF -- "KokkosP:" \
     | grep -vF -- "-----------------------------------------------------------"
 }
 
 rm -f *.h5
 
-KOKKOS_TOOLS_LIBS="$LIBKKF_PATH" KOKKOS_TOOLS_ARGS="--kkf-dump-kernel-label=test_kernel $EXTRA_KOKKOS_TOOLS_ARGS" $EXECUTABLE | tee "$REFERENCE_OUTPUT"
+KOKKOS_TOOLS_LIBS="$LIBKREPE_PATH" KOKKOS_TOOLS_ARGS="--krepe-dump-kernel-label=test_kernel $EXTRA_KOKKOS_TOOLS_ARGS" $EXECUTABLE | tee "$REFERENCE_OUTPUT"
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE

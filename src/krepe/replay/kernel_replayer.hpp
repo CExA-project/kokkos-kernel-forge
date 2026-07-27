@@ -12,9 +12,9 @@
 #include <tuple>
 #include <Kokkos_Core.hpp>
 #include "allocation.hpp"
-#include <kkf/common/extended_lambda_utils.hpp>
+#include <krepe/common/extended_lambda_utils.hpp>
 
-namespace cexa::kernel_replayer {
+namespace krepe::kernel_replayer {
 namespace impl {
 
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
@@ -448,9 +448,9 @@ void compare_views(View const& view, Tuple args, Functor&& f) {
   using value_type   = View::value_type;
 
   value_type* data = static_cast<value_type*>(
-      cexa::kernel_replayer::get_allocation<memory_space>(view.label()));
+      krepe::kernel_replayer::get_allocation<memory_space>(view.label()));
   value_type* ref_data = static_cast<value_type*>(
-      cexa::kernel_replayer::get_out_allocation<memory_space>(view.label()));
+      krepe::kernel_replayer::get_out_allocation<memory_space>(view.label()));
 
   using ViewType = Kokkos::View<
       typename View::data_type, typename View::array_layout, memory_space,
@@ -471,9 +471,9 @@ void compare_views(const std::string& label, Tuple args, Functor&& f) {
   using value_type   = View::value_type;
 
   value_type* data = static_cast<value_type*>(
-      cexa::kernel_replayer::get_allocation<memory_space>(label));
+      krepe::kernel_replayer::get_allocation<memory_space>(label));
   value_type* ref_data = static_cast<value_type*>(
-      cexa::kernel_replayer::get_out_allocation<memory_space>(label));
+      krepe::kernel_replayer::get_out_allocation<memory_space>(label));
 
   using ViewType = Kokkos::View<
       typename View::data_type, typename View::array_layout, memory_space,
@@ -512,12 +512,14 @@ Functor replay_functor(const Functor& functor) {
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
   [[maybe_unused]] void* inner_lambda_ptr  = nullptr;
   [[maybe_unused]] void* inner_lambda_save = nullptr;
-  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+  if constexpr (krepe::hdl_utils::lambda_is_hdl<Functor>()) {
     impl::init_functor(static_cast<char*>(dummy_functor_storage),
                        N - sizeof(void*));
-    inner_lambda_ptr  = kkf::hdl_utils::hdl_host_lambda_pointer(*dummy_functor);
+    inner_lambda_ptr =
+        krepe::hdl_utils::hdl_host_lambda_pointer(*dummy_functor);
     inner_lambda_save = impl::copy_extended_lambda_inner_lambda(
-        inner_lambda_ptr, kkf::hdl_utils::hdl_host_lambda_size(*dummy_functor));
+        inner_lambda_ptr,
+        krepe::hdl_utils::hdl_host_lambda_size(*dummy_functor));
   } else
 #endif
   {
@@ -528,7 +530,7 @@ Functor replay_functor(const Functor& functor) {
   std::memcpy(dummy_functor_storage, dummy_functor_buffer_save, N);
   std::free(dummy_functor_buffer_save);
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
-  if constexpr (kkf::hdl_utils::lambda_is_hdl<Functor>()) {
+  if constexpr (krepe::hdl_utils::lambda_is_hdl<Functor>()) {
     impl::restore_extended_lambda_inner_lambda(inner_lambda_ptr,
                                                inner_lambda_save);
   }
@@ -572,4 +574,4 @@ void parallel_for(const std::string& label, [[maybe_unused]] const Policy& p,
                *impl::replay_policy);
   }
 }
-}  // namespace cexa::kernel_replayer
+}  // namespace krepe::kernel_replayer

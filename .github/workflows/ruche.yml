@@ -17,7 +17,7 @@ permissions:
 jobs:
   build_and_test:
     # only run on original repo
-    if: github.repository == 'CExA-project/kokkos-kernel-forge'
+    if: github.repository == 'CExA-project/KREPE'
     runs-on: [self-hosted, cuda]
     timeout-minutes: 120
     env:
@@ -42,12 +42,12 @@ jobs:
           kokkos_configure: >-
             -DKokkos_ENABLE_OPENMP=ON
             -DBUILD_SHARED_LIBS=ON
-          kkf_configure: >-
-            -DKKF_BUILD_EXAMPLES=ON
-            -DKKF_BUILD_TESTS=ON
-            -DKKF_ENABLE_WARNINGS=ON
-            -DKKF_ENABLE_ASAN=OFF
-            -DKKF_ENABLE_UBSAN=OFF
+          krepe_configure: >-
+            -DKREPE_BUILD_EXAMPLES=ON
+            -DKREPE_BUILD_TESTS=ON
+            -DKREPE_ENABLE_WARNINGS=ON
+            -DKREPE_ENABLE_ASAN=OFF
+            -DKREPE_ENABLE_UBSAN=OFF
         - name: CUDA-A100-GCC/13.4.0-CUDA/12.8.1-Static-CUDA_CONSTEXPR-CUDA_RELOCATABLE_DEVICE_CODE
           modules: >-
             gcc/13.4.0/gcc-15.1.0
@@ -61,12 +61,12 @@ jobs:
             -DKokkos_ARCH_AMPERE80=ON
             -DKokkos_ENABLE_CUDA_CONSTEXPR=ON
             -DKokkos_ENABLE_CUDA_RELOCATABLE_DEVICE_CODE=ON
-          kkf_configure: >-
-            -DKKF_BUILD_EXAMPLES=ON
-            -DKKF_BUILD_TESTS=ON
-            -DKKF_ENABLE_WARNINGS=ON
-            -DKKF_ENABLE_ASAN=OFF
-            -DKKF_ENABLE_UBSAN=OFF
+          krepe_configure: >-
+            -DKREPE_BUILD_EXAMPLES=ON
+            -DKREPE_BUILD_TESTS=ON
+            -DKREPE_ENABLE_WARNINGS=ON
+            -DKREPE_ENABLE_ASAN=OFF
+            -DKREPE_ENABLE_UBSAN=OFF
 
     steps:
     - name: Check out repository
@@ -177,7 +177,7 @@ jobs:
             -DCMAKE_CXX_FLAGS="-Wall -Wextra" \
             -DCMAKE_PREFIX_PATH="$PWD/hdf5_install" \
             -DKokkos_DIR=kokkos_install/lib64/cmake/Kokkos/ \
-            ${{ matrix.backend.kkf_configure }}
+            ${{ matrix.backend.krepe_configure }}
 
     - name: Build
       run: |
@@ -195,4 +195,4 @@ jobs:
         run \
           -m "${{ matrix.backend.modules }}" \
           ${{ matrix.backend.test }} \
-          make -C build -j1 kkf_run_replay_tests
+          make -C build -j1 krepe_run_replay_tests

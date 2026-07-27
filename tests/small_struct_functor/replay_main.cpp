@@ -1,6 +1,6 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/replayer.hpp>
+#include <krepe/replayer.hpp>
 
 struct Functor {
  private:
@@ -16,12 +16,12 @@ struct Functor {
 };
 
 int main(int argc, char* argv[]) {
-  cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   int x = 0;
   int y = 0;
-  cexa::kernel_replayer::parallel_for("test_kernel", 1, Functor(x, y));
+  krepe::kernel_replayer::parallel_for("test_kernel", 1, Functor(x, y));
   Kokkos::fence();
 
   return 0;

@@ -1,14 +1,14 @@
 # HDF5 Dump Format
 
-The `--kkf-dump-kernel-label=<label>` argument selects one Kokkos kernel label
-to dump. For example, `--kkf-dump-kernel-label=sum_values` matches a kernel
+The `--krepe-dump-kernel-label=<label>` argument selects one Kokkos kernel label
+to dump. For example, `--krepe-dump-kernel-label=sum_values` matches a kernel
 launched with the label `"sum_values"`.
 
 For each matching kernel invocation, the tool writes two HDF5 files:
 
 ```text
-kkf_<kernel-label>_<kernel-id>_in.h5
-kkf_<kernel-label>_<kernel-id>_out.h5
+krepe_<kernel-label>_<kernel-id>_in.h5
+krepe_<kernel-label>_<kernel-id>_out.h5
 ```
 
 The `in` file is written before the kernel runs, and the `out` file is written

@@ -5,9 +5,9 @@
 #include <string>
 #include <vector>
 
-namespace kkf {
+namespace krepe {
 
 std::string copy_allocation_bytes(const ActiveAllocation& allocation,
                                   std::vector<unsigned char>& bytes);
 
-}  // namespace kkf
+}  // namespace krepe

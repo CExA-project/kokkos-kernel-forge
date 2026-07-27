@@ -2,10 +2,10 @@
 
 #include <iostream>
 
-#include <kkf/replayer.hpp>
+#include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   constexpr int number_of_values = 1024;
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
   int sum = 0;
   Kokkos::parallel_reduce("sum_values",
                           Kokkos::RangePolicy<>(0, number_of_values),
-                          cexa::kernel_replayer::replay_functor(
+                          krepe::kernel_replayer::replay_functor(
                               KOKKOS_LAMBDA(const int i, int& partial_sum) {
                                 partial_sum += values(i) * factor;
                               }),

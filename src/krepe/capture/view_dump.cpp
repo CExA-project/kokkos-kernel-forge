@@ -1,6 +1,6 @@
 #include "view_dump.hpp"
 
-#include "kkf/common/hdf5_utils.hpp"
+#include "krepe/common/hdf5_utils.hpp"
 #include "memory_copy.hpp"
 
 #include <cctype>
@@ -12,7 +12,7 @@
 #include <variant>
 #include <vector>
 
-namespace kkf {
+namespace krepe {
 namespace {
 
 std::mutex dump_mutex;
@@ -47,8 +47,8 @@ std::string sanitize_name(std::string_view value) {
 
 std::string dump_filename(std::string_view label, std::uint64_t kernel_id,
                           std::string_view phase) {
-  return "kkf_" + sanitize_name(label) + "_" + std::to_string(kernel_id) + "_" +
-         std::string(phase) + ".h5";
+  return "krepe_" + sanitize_name(label) + "_" + std::to_string(kernel_id) +
+         "_" + std::string(phase) + ".h5";
 }
 
 void write_string_attribute(hid_t object, const char* name,
@@ -226,9 +226,9 @@ ViewDumpResult dump_view_snapshot(
     const std::vector<unsigned char>& functor_data,
     const std::vector<unsigned char>& nvcc_inner_lambda_data,
     const std::unordered_map<std::string, std::string>& metadata,
-    const std::variant<kkf::NoPolicyDesc, kkf::ScalarPolicyDesc,
-                       kkf::RangePolicyDesc, kkf::MDRangePolicyDesc,
-                       kkf::TeamPolicyDesc>& policy,
+    const std::variant<krepe::NoPolicyDesc, krepe::ScalarPolicyDesc,
+                       krepe::RangePolicyDesc, krepe::MDRangePolicyDesc,
+                       krepe::TeamPolicyDesc>& policy,
     std::string_view phase, std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation) {
   ViewDumpResult result;
@@ -296,4 +296,4 @@ ViewDumpResult dump_view_snapshot(
   return result;
 }
 
-}  // namespace kkf
+}  // namespace krepe

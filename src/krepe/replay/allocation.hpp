@@ -17,7 +17,7 @@
 #define KERNEL_REPLAYER_HAS_UNSUPPORTED_DEVICE_SPACE
 #endif
 
-namespace cexa::kernel_replayer::impl {
+namespace krepe::kernel_replayer::impl {
 
 inline std::pair<char*, std::size_t> get_allocation_address(
     void* target_address, std::size_t size, MemorySpaceType space) {
@@ -117,4 +117,4 @@ struct Allocation {
     return *this;
   }
 };
-}  // namespace cexa::kernel_replayer::impl
+}  // namespace krepe::kernel_replayer::impl
