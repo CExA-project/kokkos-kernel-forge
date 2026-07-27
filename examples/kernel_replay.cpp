@@ -5,7 +5,7 @@
 #include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   constexpr int number_of_values = 1024;
@@ -18,13 +18,12 @@ int main(int argc, char* argv[]) {
   int factor = 0;
 
   int sum = 0;
-  Kokkos::parallel_reduce("sum_values",
-                          Kokkos::RangePolicy<>(0, number_of_values),
-                          krepe::kernel_replayer::replay_functor(
-                              KOKKOS_LAMBDA(const int i, int& partial_sum) {
-                                partial_sum += values(i) * factor;
-                              }),
-                          sum);
+  Kokkos::parallel_reduce(
+      "sum_values", Kokkos::RangePolicy<>(0, number_of_values),
+      krepe::replay_functor(KOKKOS_LAMBDA(const int i, int& partial_sum) {
+        partial_sum += values(i) * factor;
+      }),
+      sum);
 
   constexpr int expected_sum =
       2 * number_of_values * (number_of_values - 1) / 2;

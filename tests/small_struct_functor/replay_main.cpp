@@ -16,12 +16,12 @@ struct Functor {
 };
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   int x = 0;
   int y = 0;
-  krepe::kernel_replayer::parallel_for("test_kernel", 1, Functor(x, y));
+  krepe::parallel_for("test_kernel", 1, Functor(x, y));
   Kokkos::fence();
 
   return 0;

@@ -3,7 +3,7 @@
 #include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int N = 1024;
@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
   // Kokkos::parallel_for(
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", Kokkos::RangePolicy(0, 1),
   // nvcc doesn't support generic host device lambdas
 #if !defined(KOKKOS_COMPILER_NVCC)
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
   //     Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
   // Kokkos::printf("values(5) = %d\n", h_values(5));
 
-  krepe::kernel_replayer::compare_views<int*>(
+  krepe::compare_views<int*>(
       "values", std::make_tuple(1024), [](auto ref_values, auto replay_values) {
         auto h_replay_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), replay_values);

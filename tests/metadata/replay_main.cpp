@@ -18,24 +18,21 @@ void krepe_expect(const T& a, const U& b, const char* expr_a,
 #define KREPE_EXPECT(a, b) krepe_expect((a), (b), #a, #b)
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
-  KREPE_EXPECT(krepe::kernel_replayer::get_metadata("foo").value(), "bar");
-  KREPE_EXPECT(krepe::kernel_replayer::get_metadata("with null bytes").value(),
+  KREPE_EXPECT(krepe::get_metadata("foo").value(), "bar");
+  KREPE_EXPECT(krepe::get_metadata("with null bytes").value(),
                std::string("hello\0world", 12));
-  KREPE_EXPECT(krepe::kernel_replayer::get_metadata("n_iter").value(), "10");
-  KREPE_EXPECT(krepe::kernel_replayer::get_metadata("missing").has_value(),
-               false);
+  KREPE_EXPECT(krepe::get_metadata("n_iter").value(), "10");
+  KREPE_EXPECT(krepe::get_metadata("missing").has_value(), false);
 
-  int n_iter =
-      std::stoi(krepe::kernel_replayer::get_metadata("n_iter").value());
+  int n_iter = std::stoi(krepe::get_metadata("n_iter").value());
 
   int sum = 0;
-  Kokkos::parallel_reduce("test_kernel", n_iter,
-                          krepe::kernel_replayer::replay_functor(
-                              KOKKOS_LAMBDA(int, int& sum) { sum++; }),
-                          sum);
+  Kokkos::parallel_reduce(
+      "test_kernel", n_iter,
+      krepe::replay_functor(KOKKOS_LAMBDA(int, int& sum) { sum++; }), sum);
 
   Kokkos::printf("Result is %d\n", sum);
 

@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", N, KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();
 

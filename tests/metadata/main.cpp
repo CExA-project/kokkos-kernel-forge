@@ -6,17 +6,15 @@
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
-  krepe::kernel_replayer::add_metadata("foo", "bar");
-  krepe::kernel_replayer::add_metadata("with null bytes",
-                                       std::string("hello\0world", 12));
+  krepe::add_metadata("foo", "bar");
+  krepe::add_metadata("with null bytes", std::string("hello\0world", 12));
   int n_iter = 10;
-  krepe::kernel_replayer::add_metadata("n_iter", std::to_string(n_iter));
+  krepe::add_metadata("n_iter", std::to_string(n_iter));
 
   int sum = 0;
-  Kokkos::parallel_reduce("test_kernel", n_iter,
-                          krepe::kernel_replayer::replay_functor(
-                              KOKKOS_LAMBDA(int, int& sum) { sum++; }),
-                          sum);
+  Kokkos::parallel_reduce(
+      "test_kernel", n_iter,
+      krepe::replay_functor(KOKKOS_LAMBDA(int, int& sum) { sum++; }), sum);
 
   Kokkos::printf("Result is %d\n", sum);
 

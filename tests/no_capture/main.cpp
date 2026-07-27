@@ -5,7 +5,7 @@
 int main(int argc, char* argv[]) {
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", 1,
       KOKKOS_LAMBDA(int) { Kokkos::printf("Hello from the kernel!\n"); });
   Kokkos::fence();

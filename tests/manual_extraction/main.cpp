@@ -10,9 +10,9 @@ int main(int argc, char* argv[]) {
   Kokkos::parallel_for(
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  Kokkos::parallel_for("test_kernel", N,
-                       krepe::kernel_replayer::replay_functor(
-                           KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
+  Kokkos::parallel_for(
+      "test_kernel", N,
+      krepe::replay_functor(KOKKOS_LAMBDA(int i) { values(i) *= 2; }));
   Kokkos::fence();
 
   auto h_values =

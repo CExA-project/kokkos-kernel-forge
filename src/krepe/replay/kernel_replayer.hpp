@@ -14,7 +14,7 @@
 #include "allocation.hpp"
 #include <krepe/common/extended_lambda_utils.hpp>
 
-namespace krepe::kernel_replayer {
+namespace krepe {
 namespace impl {
 
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
@@ -448,9 +448,9 @@ void compare_views(View const& view, Tuple args, Functor&& f) {
   using value_type   = View::value_type;
 
   value_type* data = static_cast<value_type*>(
-      krepe::kernel_replayer::get_allocation<memory_space>(view.label()));
+      krepe::get_allocation<memory_space>(view.label()));
   value_type* ref_data = static_cast<value_type*>(
-      krepe::kernel_replayer::get_out_allocation<memory_space>(view.label()));
+      krepe::get_out_allocation<memory_space>(view.label()));
 
   using ViewType = Kokkos::View<
       typename View::data_type, typename View::array_layout, memory_space,
@@ -470,10 +470,10 @@ void compare_views(const std::string& label, Tuple args, Functor&& f) {
   using memory_space = View::memory_space;
   using value_type   = View::value_type;
 
-  value_type* data = static_cast<value_type*>(
-      krepe::kernel_replayer::get_allocation<memory_space>(label));
-  value_type* ref_data = static_cast<value_type*>(
-      krepe::kernel_replayer::get_out_allocation<memory_space>(label));
+  value_type* data =
+      static_cast<value_type*>(krepe::get_allocation<memory_space>(label));
+  value_type* ref_data =
+      static_cast<value_type*>(krepe::get_out_allocation<memory_space>(label));
 
   using ViewType = Kokkos::View<
       typename View::data_type, typename View::array_layout, memory_space,
@@ -574,4 +574,4 @@ void parallel_for(const std::string& label, [[maybe_unused]] const Policy& p,
                *impl::replay_policy);
   }
 }
-}  // namespace krepe::kernel_replayer
+}  // namespace krepe

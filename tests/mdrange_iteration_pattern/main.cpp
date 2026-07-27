@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
       KOKKOS_LAMBDA(int i, int j) { values(i, j) = i * j; });
 
   using exec_space = Kokkos::DefaultExecutionSpace;
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel",
       Kokkos::MDRangePolicy<
           Kokkos::Rank<2, Kokkos::Iterate::Left, Kokkos::Iterate::Right>,

@@ -8,7 +8,7 @@
 
 #define CHECK_HIP_CALL(expr) KOKKOS_IMPL_HIP_SAFE_CALL(expr)
 
-namespace krepe::kernel_replayer::impl {
+namespace krepe::impl {
 inline auto regular_device_allocate(std::size_t size, char* data) {
   void* ptr;
   CHECK_HIP_CALL(hipMalloc(&ptr, size));
@@ -72,4 +72,4 @@ inline void device_deallocate(void* address, std::size_t size) {
   CHECK_HIP_CALL(hipMemUnmap(address, size));
   CHECK_HIP_CALL(hipMemAddressFree(address, size));
 }
-}  // namespace krepe::kernel_replayer::impl
+}  // namespace krepe::impl

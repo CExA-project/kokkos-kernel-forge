@@ -6,7 +6,7 @@
 #include <Kokkos_Core.hpp>
 #include <krepe/common/extended_lambda_utils.hpp>
 
-namespace krepe::kernel_replayer {
+namespace krepe {
 namespace impl {
 struct scratch_description {
   int level0;
@@ -195,4 +195,4 @@ void parallel_for(const std::string& label, const Policy& policy,
 }
 
 void add_metadata(const std::string& key, const std::string& value);
-}  // namespace krepe::kernel_replayer
+}  // namespace krepe
