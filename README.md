@@ -1,8 +1,8 @@
 # KREPE
 
-KREPE (Kernel Replay, Execution for Performance Evaluation) provides tools for
-extracting, profiling, and auto-tuning Kokkos kernels from large HPC
-applications.
+KREPE (Kernel Replay, Execution for Performance Evaluation) captures the
+execution context of Kokkos kernels and replays them in standalone programs for
+controlled performance evaluation.
 
 ## Build
 
