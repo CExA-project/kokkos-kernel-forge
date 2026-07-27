@@ -274,7 +274,7 @@ ViewDumpResult dump_view_snapshot(
     std::visit([&](auto&& arg) { write_policy(policy_group.get(), arg); },
                policy);
     policy_group.close_checked();
-    
+
     Hdf5Handle functor_group(
         CHECK_HDF5_ID(H5Gcreate2(file.get(), "functor", H5P_DEFAULT,
                                  H5P_DEFAULT, H5P_DEFAULT)),
@@ -282,7 +282,7 @@ ViewDumpResult dump_view_snapshot(
     write_dataset(functor_group.get(), "functor", functor_data);
     write_dataset(functor_group.get(), "nvcc_inner_lambda",
                   nvcc_inner_lambda_data);
-functor_group.close_checked();
+    functor_group.close_checked();
 
     file.close_checked();
     result.ok = true;
