@@ -9,7 +9,7 @@ controlled performance evaluation.
 Clone the repo, then configure and build with CMake
 
 ```sh
-git clone https://github.com/CExA-project/krepe.git
+git clone https://github.com/CExA-project/KREPE.git
 ```
 
 The library can be included in a CMake project:

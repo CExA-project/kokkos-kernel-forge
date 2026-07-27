@@ -15,7 +15,7 @@ concurrency:
 jobs:
   compatibility:
     name: ${{ matrix.name }}
-    if: github.repository == 'CExA-project/krepe'
+    if: github.repository == 'CExA-project/KREPE'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 

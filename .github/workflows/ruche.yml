@@ -17,7 +17,7 @@ permissions:
 jobs:
   build_and_test:
     # only run on original repo
-    if: github.repository == 'CExA-project/krepe'
+    if: github.repository == 'CExA-project/KREPE'
     runs-on: [self-hosted, cuda]
     timeout-minutes: 120
     env:
