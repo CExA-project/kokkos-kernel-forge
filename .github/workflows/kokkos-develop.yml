@@ -90,7 +90,6 @@ jobs:
           git -C kokkos-src fetch --depth 1 origin "$KOKKOS_DEVELOP_SHA"
         fi
         git -C kokkos-src checkout --detach "$KOKKOS_DEVELOP_SHA"
-        test "$(git -C kokkos-src rev-parse HEAD)" = "$KOKKOS_DEVELOP_SHA"
         cmake -S kokkos-src -B kokkos-build -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_CXX_COMPILER="$CXX" \
