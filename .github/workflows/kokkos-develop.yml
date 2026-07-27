@@ -1,0 +1,142 @@
+name: Kokkos develop compatibility
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * 1-5" # every weekday at 1am
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    name: ${{ matrix.name }}
+    if: github.repository == 'CExA-project/kokkos-kernel-forge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - name: GCC Release with Kokkos develop
+          compiler: gcc
+          cxx: g++
+        - name: Clang Release with Kokkos develop
+          compiler: clang
+          cxx: clang++
+
+    env:
+      CXX: ${{ matrix.cxx }}
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_COMPRESS: "true"
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-develop-${{ matrix.compiler }}
+      kkf_ROOT: ${{ github.workspace }}/kkf_install
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v7
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          ccache \
+          clang \
+          cmake \
+          g++ \
+          hdf5-tools \
+          libhdf5-dev \
+          ninja-build
+
+    - name: Resolve Kokkos develop SHA
+      id: kokkos-ref
+      run: |
+        read -r sha ref < <(git ls-remote https://github.com/kokkos/kokkos.git refs/heads/develop)
+        test "$ref" = "refs/heads/develop"
+        test -n "$sha"
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        echo "KOKKOS_DEVELOP_SHA=$sha" >> "$GITHUB_ENV"
+        echo "$sha"
+
+    - name: Cache compiler objects
+      uses: actions/cache@v6
+      with:
+        path: ${{ env.CCACHE_DIR }}
+        key: ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.compiler }}-${{ steps.kokkos-ref.outputs.sha }}-${{ github.sha }}
+        restore-keys: |
+          ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.compiler }}-${{ steps.kokkos-ref.outputs.sha }}-
+          ccache-kokkos-develop-${{ runner.os }}-${{ runner.arch }}-${{ matrix.compiler }}-
+
+    - name: Configure ccache
+      run: |
+        ccache --set-config=max_size="$CCACHE_MAXSIZE"
+        ccache --zero-stats
+
+    - name: Build and install Kokkos develop
+      run: |
+        git clone --depth 1 --branch develop https://github.com/kokkos/kokkos.git kokkos-src
+        if ! git -C kokkos-src cat-file -e "$KOKKOS_DEVELOP_SHA^{commit}"; then
+          git -C kokkos-src fetch --depth 1 origin "$KOKKOS_DEVELOP_SHA"
+        fi
+        git -C kokkos-src checkout --detach "$KOKKOS_DEVELOP_SHA"
+        cmake -S kokkos-src -B kokkos-build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_CXX_EXTENSIONS=OFF \
+          -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
+          -DKokkos_ENABLE_SERIAL=ON
+        cmake --build kokkos-build --parallel "$(nproc)"
+        cmake --install kokkos-build
+
+    - name: Configure project
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+          -DCMAKE_PREFIX_PATH="$Kokkos_ROOT" \
+          -DKKF_BUILD_TESTS=ON \
+          -DKKF_BUILD_EXAMPLES=ON \
+          -DKKF_ENABLE_WARNINGS=ON
+
+    - name: Build project
+      run: cmake --build build --parallel "$(nproc)"
+
+    - name: Run tests
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)"
+
+    - name: Install the project
+      run: cmake --install build --prefix "$kkf_ROOT"
+
+    - name: Test the installation
+      working-directory: ${{ github.workspace }}/tests/install_test
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_COMPILER="$CXX" \
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_CXX_STANDARD_REQUIRED=ON \
+          -DCMAKE_CXX_EXTENSIONS=OFF \
+          -DCMAKE_PREFIX_PATH="$Kokkos_ROOT;$kkf_ROOT"
+        cmake --build build --parallel "$(nproc)"
+        KOKKOS_TOOLS_LIBS="$kkf_ROOT/lib/libkkf.so" KOKKOS_TOOLS_ARGS=--kkf-dump-kernel-label=test_kernel ./build/test
+        ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5
+
+    - name: Show ccache statistics
+      if: always()
+      run: |
+        if command -v ccache >/dev/null; then
+          ccache --show-stats
+        fi
