@@ -193,10 +193,6 @@ const void* allocation_data_pointer(const void* ptr) {
          KREPE_KOKKOS_ALLOCATION_HEADER_SIZE;
 }
 
-// TODO(kokkos/kokkos#9337): Remove the allocation-bound queries below and use
-// the size reported by the profiling hook directly once Kokkos reports an
-// explicit zero logical size for empty Views in every supported memory space
-// (Host, CUDA, and HIP), and kkf requires a Kokkos release containing that fix.
 std::size_t host_allocation_size(const void* ptr) {
 #if defined(__linux__)
   // The allocator may reserve more memory than Kokkos requested, so

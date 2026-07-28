@@ -52,9 +52,6 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
   if (!host_accessible && !cuda_device && !hip_device) {
     return "memory space is not supported for raw byte dumps";
   }
-  // TODO(kokkos/kokkos#9337): Remove data_size_known and this guard together
-  // with the temporary allocation-bound queries once the profiling hook size
-  // reliably represents the View payload, including zero-sized Views.
   if (!allocation.record.data_size_known) {
     return "allocation data size could not be bounded safely";
   }
