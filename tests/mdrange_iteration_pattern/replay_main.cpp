@@ -13,13 +13,13 @@ int main(int argc, char* argv[]) {
   //     "init", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {M, N}),
   //     KOKKOS_LAMBDA(int i, int j) { values(i, j) = i * j; });
 
-  using exec_space = Kokkos::DefaultExecutionSpace;
   krepe::parallel_for(
       "test_kernel", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {1, 1}),
       KOKKOS_LAMBDA(int i, int j) {
         values(i, j) *= 2;
 #if defined(KOKKOS_ENABLE_SERIAL)
-        if constexpr (std::is_same_v<exec_space, Kokkos::Serial>) {
+        if constexpr (std::is_same_v<Kokkos::DefaultExecutionSpace,
+                                     Kokkos::Serial>) {
           Kokkos::printf("%d %d\n", i, j);
         }
 #endif
