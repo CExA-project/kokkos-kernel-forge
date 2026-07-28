@@ -41,7 +41,9 @@ if(KREPE_ENABLE_UBSAN)
   target_link_options(krepe_sanitizers INTERFACE -fsanitize=undefined)
 endif()
 
-find_package(Kokkos REQUIRED)
+set(KREPE_MINIMUM_KOKKOS_VERSION 5.0)
+
+find_package(Kokkos ${KREPE_MINIMUM_KOKKOS_VERSION} REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C HL)
 
 include(GNUInstallDirs)
