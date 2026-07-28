@@ -3,7 +3,7 @@
 #include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int M = 32;
@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
   //     KOKKOS_LAMBDA(int i, int j) { values(i, j) = i * j; });
 
   using exec_space = Kokkos::DefaultExecutionSpace;
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", Kokkos::MDRangePolicy<Kokkos::Rank<2>>({0, 0}, {1, 1}),
       KOKKOS_LAMBDA(int i, int j) {
         values(i, j) *= 2;
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
   //     Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
   // Kokkos::printf("values(1, 2) = %d\n", h_values(1, 2));
 
-  krepe::kernel_replayer::compare_views<int**>(
+  krepe::compare_views<int**>(
       "values", std::make_tuple(M, N), [](auto ref_values, auto replay_values) {
         auto h_replay_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), replay_values);

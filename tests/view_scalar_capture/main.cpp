@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
       "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   int factor = 3;
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", N, KOKKOS_LAMBDA(int i) { values(i) *= factor; });
   Kokkos::fence();
 

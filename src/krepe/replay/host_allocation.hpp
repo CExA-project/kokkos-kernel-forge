@@ -9,7 +9,7 @@
 #include <cstring>
 #include <tuple>
 
-namespace krepe::kernel_replayer::impl {
+namespace krepe::impl {
 
 inline auto regular_host_allocate(std::size_t size, char* data) {
   void* ptr = std::malloc(size);
@@ -59,4 +59,4 @@ inline void host_deallocate(void* address, std::size_t size) {
   munmap(address, size);
 }
 
-}  // namespace krepe::kernel_replayer::impl
+}  // namespace krepe::impl

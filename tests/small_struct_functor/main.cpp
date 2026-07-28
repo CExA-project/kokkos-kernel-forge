@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
 
   int x = 42;
   int y = -67;
-  krepe::kernel_replayer::parallel_for("test_kernel", 1, Functor(x, y));
+  krepe::parallel_for("test_kernel", 1, Functor(x, y));
   Kokkos::fence();
 
   return 0;

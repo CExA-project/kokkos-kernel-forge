@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
       "init", Kokkos::RangePolicy<exec_space>(0, N),
       KOKKOS_LAMBDA(int i) { values(i) = i; });
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", Kokkos::RangePolicy<exec_space>(0, N),
       KOKKOS_LAMBDA(int i) { values(i) *= 2; });
   Kokkos::fence();

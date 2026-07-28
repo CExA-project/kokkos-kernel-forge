@@ -10,17 +10,16 @@ struct MultiplyFunctor {
 };
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int N = 1024;
   Kokkos::View<int*> values;
 
-  krepe::kernel_replayer::parallel_for("test_kernel", N,
-                                       MultiplyFunctor{0, values});
+  krepe::parallel_for("test_kernel", N, MultiplyFunctor{0, values});
   Kokkos::fence();
 
-  krepe::kernel_replayer::compare_views<int*>(
+  krepe::compare_views<int*>(
       "values", std::make_tuple(N), [](auto ref_values, auto replay_values) {
         auto h_replay_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), replay_values);

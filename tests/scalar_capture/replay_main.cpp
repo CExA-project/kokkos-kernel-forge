@@ -3,11 +3,11 @@
 #include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   int answer = 0;
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", 0, KOKKOS_LAMBDA(int) {
         Kokkos::printf("Hello from the kernel! The answer is %d\n", answer);
       });

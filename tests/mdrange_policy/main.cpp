@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
       "init", Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {M, N, K}),
       KOKKOS_LAMBDA(int i, int j, int k) { values(i, j, k) = i * j * k; });
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel",
       Kokkos::MDRangePolicy<Kokkos::Rank<3>>({0, 0, 0}, {M, N, K}),
       KOKKOS_LAMBDA(int i, int j, int k) { values(i, j, k) *= 2; });

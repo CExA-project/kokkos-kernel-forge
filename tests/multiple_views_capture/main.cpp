@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
         B(i) = i % 32;
       });
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", N, KOKKOS_LAMBDA(int i) { C(i) = A(i) + B(i); });
   Kokkos::fence();
 

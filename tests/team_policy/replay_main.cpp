@@ -3,7 +3,7 @@
 #include <krepe/replayer.hpp>
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   const int N = 1024;
@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
   //     "init", values.size(), KOKKOS_LAMBDA(int i) { values(i) = i; });
 
   auto policy = Kokkos::TeamPolicy(1, 1);
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", policy, KOKKOS_LAMBDA(decltype(policy)::member_type team) {
         Kokkos::parallel_for(
             Kokkos::TeamVectorRange(team, team.league_rank() * 256,
@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
   //     Kokkos::create_mirror_view_and_copy(Kokkos::HostSpace(), values);
   // Kokkos::printf("values(5) = %d\n", h_values(5));
 
-  krepe::kernel_replayer::compare_views<int*>(
+  krepe::compare_views<int*>(
       "values", std::make_tuple(1024), [](auto ref_values, auto replay_values) {
         auto h_replay_values = Kokkos::create_mirror_view_and_copy(
             Kokkos::HostSpace(), replay_values);

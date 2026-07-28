@@ -87,7 +87,7 @@ static std::vector<char> functor_data;
 #if defined(KERNEL_REPLAYER_USE_NVCC_HDL_WORKAROUND)
 static std::vector<char> nvcc_inner_lambda_data;
 
-namespace krepe::kernel_replayer::impl {
+namespace krepe::impl {
 void* copy_extended_lambda_inner_lambda(void* inner_lambda_ptr,
                                         std::size_t inner_lambda_size) {
   assert(inner_lambda_size == nvcc_inner_lambda_data.size());
@@ -106,11 +106,11 @@ void restore_extended_lambda_inner_lambda(void* inner_lambda_ptr,
               nvcc_inner_lambda_data.size());
   std::free(inner_lambda_save);
 }
-}  // namespace krepe::kernel_replayer::impl
+}  // namespace krepe::impl
 
 #endif
 
-namespace krepe::kernel_replayer {
+namespace krepe {
 
 namespace impl {
 
@@ -765,4 +765,4 @@ void ScopeGuard::allocate_output(std::string label,
   }
 }
 
-}  // namespace krepe::kernel_replayer
+}  // namespace krepe

@@ -5,7 +5,7 @@
 
 #include <optional>
 
-namespace krepe::kernel_replayer {
+namespace krepe {
 namespace impl {
 
 void (*add_metadata_function)(const char*, const char*, std::size_t) = nullptr;
@@ -155,4 +155,4 @@ void add_metadata(const std::string& key, const std::string& value) {
   impl::add_metadata_function(key.c_str(), value.c_str(), value.size());
 }
 
-}  // namespace krepe::kernel_replayer
+}  // namespace krepe
