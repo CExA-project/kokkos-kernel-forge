@@ -6,6 +6,8 @@ controlled performance evaluation.
 
 ## Build
 
+KREPE requires Kokkos 5.0 or newer.
+
 Clone the repo, then configure and build with CMake
 
 ```sh
