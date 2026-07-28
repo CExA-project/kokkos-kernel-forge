@@ -8,6 +8,9 @@ name: Ruche build and test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+    - ci/kokkos-versions # Temporary: remove before merging
   schedule:
   - cron: "30 0 * * 1-5" # every weekday at midnight UTC
 
@@ -16,18 +19,22 @@ permissions:
 
 jobs:
   build_and_test:
+    name: ${{ matrix.backend.name }} with Kokkos ${{ matrix.kokkos_version }}
     # only run on original repo
     if: github.repository == 'CExA-project/KREPE'
     runs-on: [self-hosted, cuda]
     timeout-minutes: 120
     env:
-      KOKKOS_VERSION: 5.1.1
+      KOKKOS_VERSION: ${{ matrix.kokkos_version }}
       HDF5_VERSION: hdf5-1.14.6
 
     strategy:
       # allow all matrix jobs to perform even if errors occur
       fail-fast: false
       matrix:
+        kokkos_version:
+        - "5.0.0"
+        - "5.1.0"
         build_type:
         - Release
         cxx_standard:
@@ -169,7 +176,7 @@ jobs:
             -G "Unix Makefiles" \
             -S . \
             -B build \
-            -DBUILDNAME=${{ matrix.backend.name }}-C++${{ matrix.cxx_standard }}-${{ matrix.build_type }} \
+            -DBUILDNAME=${{ matrix.backend.name }}-Kokkos-${{ matrix.kokkos_version }}-C++${{ matrix.cxx_standard }}-${{ matrix.build_type }} \
             -DSITE=cea-ruche \
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
             -DCMAKE_CXX_STANDARD=${{ matrix.cxx_standard }} \

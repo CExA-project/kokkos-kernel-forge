@@ -22,14 +22,17 @@ concurrency:
 
 jobs:
   cmake:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.configuration.name }} with Kokkos ${{ matrix.kokkos_version }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        include:
+        kokkos_version:
+        - "5.0.0"
+        - "5.1.0"
+        configuration:
         - name: gcc Release build and tests
           compiler: gcc
           cxx: g++
@@ -62,9 +65,9 @@ jobs:
           ctest_args: -L sanitizer_compatible
 
     env:
-      CXX: ${{ matrix.cxx }}
-      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
-      KOKKOS_VERSION: 5.1.1
+      CXX: ${{ matrix.configuration.cxx }}
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.kokkos_version }}-${{ matrix.configuration.compiler }}
+      KOKKOS_VERSION: ${{ matrix.kokkos_version }}
       krepe_ROOT: ${{ github.workspace }}/krepe_install
 
     steps:
@@ -91,8 +94,8 @@ jobs:
           echo "ImageVersion=${ImageVersion:-unknown}"
           echo "KOKKOS_VERSION=$KOKKOS_VERSION"
           echo "Kokkos_ENABLE_SERIAL=ON"
-          echo "matrix.compiler=${{ matrix.compiler }}"
-          echo "CMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          echo "matrix.compiler=${{ matrix.configuration.compiler }}"
+          echo "CMAKE_BUILD_TYPE=${{ matrix.configuration.build_type }}"
           echo "CXX=$CXX"
           "$CXX" --version
           cmake --version
@@ -105,14 +108,14 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.configuration.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
         cmake -S kokkos-src -B kokkos-build -G Ninja \
-          -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
+          -DCMAKE_BUILD_TYPE="${{ matrix.configuration.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
           -DKokkos_ENABLE_SERIAL=ON
@@ -122,29 +125,29 @@ jobs:
     - name: Configure project
       run: |
         cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
+          -DCMAKE_BUILD_TYPE="${{ matrix.configuration.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DKREPE_BUILD_TESTS=ON \
           -DKREPE_ENABLE_WARNINGS=ON \
-          -DKREPE_ENABLE_ASAN="${{ matrix.krepe_enable_asan }}" \
-          -DKREPE_ENABLE_UBSAN="${{ matrix.krepe_enable_ubsan }}"
+          -DKREPE_ENABLE_ASAN="${{ matrix.configuration.krepe_enable_asan }}" \
+          -DKREPE_ENABLE_UBSAN="${{ matrix.configuration.krepe_enable_ubsan }}"
 
     - name: Build project
       run: cmake --build build --parallel "$(nproc)"
 
     - name: Run tests
-      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.ctest_args }}
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.configuration.ctest_args }}
 
     - name: Install the project
-      if: ${{ matrix.test_installation }}
+      if: ${{ matrix.configuration.test_installation }}
       run: cmake --install build --prefix "$krepe_ROOT"
 
     - name: Test the installation
-      if: ${{ matrix.test_installation }}
+      if: ${{ matrix.configuration.test_installation }}
       working-directory: ${{ github.workspace }}/tests/install_test
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.configuration.build_type }}
         cmake --build build --parallel "$(nproc)"
         KOKKOS_TOOLS_LIBS="$krepe_ROOT/lib/libkrepe.so" KOKKOS_TOOLS_ARGS=--krepe-dump-kernel-label=test_kernel ./build/test
         ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5
