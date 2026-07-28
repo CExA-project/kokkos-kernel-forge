@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.26)
 
 project(krepe-test)
 
+find_package(Kokkos REQUIRED)
 find_package(krepe REQUIRED)
 
 add_executable(test main.cpp)
