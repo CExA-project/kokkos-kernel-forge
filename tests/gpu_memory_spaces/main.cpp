@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
         host_pinned_values(i) = i + 3;
       });
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", N, KOKKOS_LAMBDA(const int i) {
         device_values(i) *= 2;
         managed_values(i) *= 3;

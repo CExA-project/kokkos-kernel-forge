@@ -1,36 +1,35 @@
 #include <Kokkos_Core.hpp>
 
-#include <kkf/replayer.hpp>
+#include <krepe/replayer.hpp>
 
 #include <cstdlib>
 
 int main(int argc, char* argv[]) {
-  cexa::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   Kokkos::View<int*> values;
 
-  Kokkos::parallel_for(
-      "test_kernel", Kokkos::RangePolicy<>(0, 1),
-      cexa::kernel_replayer::replay_functor(KOKKOS_LAMBDA(int) {
-        if (values.extent(0) != 0) {
-          values(0) = 1;
-        }
-      }));
+  Kokkos::parallel_for("test_kernel", Kokkos::RangePolicy<>(0, 1),
+                       krepe::replay_functor(KOKKOS_LAMBDA(int) {
+                         if (values.extent(0) != 0) {
+                           values(0) = 1;
+                         }
+                       }));
   Kokkos::fence();
 
   using memory_space = Kokkos::View<int*>::memory_space;
-  int* in_data       = static_cast<int*>(
-      cexa::kernel_replayer::get_allocation<memory_space>("empty_values"));
+  int* in_data =
+      static_cast<int*>(krepe::get_allocation<memory_space>("empty_values"));
   int* out_data = static_cast<int*>(
-      cexa::kernel_replayer::get_out_allocation<memory_space>("empty_values"));
+      krepe::get_out_allocation<memory_space>("empty_values"));
 
   if (in_data != nullptr || out_data != nullptr) {
     Kokkos::printf("Expected null replay pointers for an empty view\n");
     return 1;
   }
 
-  cexa::kernel_replayer::compare_views<int*>(
+  krepe::compare_views<int*>(
       "empty_values", std::make_tuple(0),
       [](auto ref_values, auto replay_values) {
         if (ref_values.extent(0) != 0 || replay_values.extent(0) != 0) {

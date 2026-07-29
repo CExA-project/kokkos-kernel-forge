@@ -21,9 +21,8 @@ namespace {
 
 template <class MemorySpace>
 void require_dumped_allocation(const char* label) {
-  if (krepe::kernel_replayer::get_allocation<MemorySpace>(label) == nullptr ||
-      krepe::kernel_replayer::get_out_allocation<MemorySpace>(label) ==
-          nullptr) {
+  if (krepe::get_allocation<MemorySpace>(label) == nullptr ||
+      krepe::get_out_allocation<MemorySpace>(label) == nullptr) {
     Kokkos::printf("Expected captured bytes for allocation \"%s\"\n", label);
     std::exit(1);
   }
@@ -33,7 +32,7 @@ void compare_values(const char* label) {
   // The replayer reserves all non-host allocations in device virtual memory.
   // Use DeviceSpace here even for the managed and host-pinned source views so
   // validation accesses the replay allocation through the correct path.
-  krepe::kernel_replayer::compare_views<int*, DeviceSpace>(
+  krepe::compare_views<int*, DeviceSpace>(
       label, std::make_tuple(16 * 1024),
       [label](const auto expected, const auto actual) {
         auto host_expected =
@@ -53,14 +52,14 @@ void compare_values(const char* label) {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  krepe::kernel_replayer::ScopeGuard replay_scope(argc, argv);
+  krepe::ScopeGuard replay_scope(argc, argv);
   Kokkos::ScopeGuard kokkos_scope(argc, argv);
 
   Kokkos::View<int*, DeviceSpace> device_values;
   Kokkos::View<int*, ManagedSpace> managed_values;
   Kokkos::View<int*, HostPinnedSpace> host_pinned_values;
 
-  krepe::kernel_replayer::parallel_for(
+  krepe::parallel_for(
       "test_kernel", 0, KOKKOS_LAMBDA(const int i) {
         device_values(i) *= 2;
         managed_values(i) *= 3;
