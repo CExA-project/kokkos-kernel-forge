@@ -229,6 +229,14 @@ std::optional<std::uint64_t> validated_data_size(
 std::optional<std::uint64_t> allocation_data_size(
     const std::string& space, const void* ptr, const void* data_ptr,
     const std::uint64_t reported_size) {
+  if (reported_size == 0) {
+    return 0;
+  }
+
+  if (reported_size != KREPE_KOKKOS_ALLOCATION_HEADER_SIZE) {
+    return reported_size;
+  }
+
 #if defined(KREPE_ENABLE_CUDA_DUMP)
   if (is_cuda_pointer_attribute_space(space)) {
     CUdeviceptr allocation_base       = 0;
