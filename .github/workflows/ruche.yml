@@ -8,9 +8,6 @@ name: Ruche build and test
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-    - fix/mdrange-unused-exec-space # Temporary: remove before merging
   schedule:
   - cron: "30 0 * * 1-5" # every weekday at midnight UTC
 
