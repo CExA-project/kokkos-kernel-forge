@@ -61,7 +61,7 @@ jobs:
             cuda/12.8.1/none-none
             cmake/3.31.9/gcc-15.1.0
             python/3.14.0/gcc-15.1.0
-          test: -e gpu -g a100
+          test: -e gpu -g a100 -x ruche-gpu17
           kokkos_configure: >-
             -DKokkos_ENABLE_CUDA=ON
             -DKokkos_ENABLE_SERIAL=ON
