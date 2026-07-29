@@ -29,6 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Keep Release coverage for every supported Kokkos version.
         kokkos_version:
         - "5.0.0"
         - "5.1.0"
@@ -37,6 +38,8 @@ jobs:
           compiler: gcc
           cxx: g++
           build_type: Release
+          kokkos_enable_serial: "ON"
+          kokkos_enable_openmp: "OFF"
           krepe_enable_asan: OFF
           krepe_enable_ubsan: OFF
           ctest_args: ''
@@ -45,29 +48,55 @@ jobs:
           compiler: clang
           cxx: clang++
           build_type: Release
+          kokkos_enable_serial: "ON"
+          kokkos_enable_openmp: "OFF"
           krepe_enable_asan: OFF
           krepe_enable_ubsan: OFF
           ctest_args: ''
           test_installation: true
-        - name: clang ASan build and tests
-          compiler: clang-asan
-          cxx: clang++
-          build_type: RelWithDebInfo
-          krepe_enable_asan: ON
-          krepe_enable_ubsan: OFF
-          ctest_args: -L sanitizer_compatible
-        - name: clang UBSan build and tests
-          compiler: clang-ubsan
-          cxx: clang++
-          build_type: RelWithDebInfo
-          krepe_enable_asan: OFF
-          krepe_enable_ubsan: ON
-          ctest_args: -L sanitizer_compatible
+        # Run extended coverage only for the latest supported version. Update
+        # every include entry when rolling the matrix forward.
+        include:
+        - kokkos_version: "5.1.0"
+          configuration:
+            name: clang ASan build and tests
+            compiler: clang-asan
+            cxx: clang++
+            build_type: RelWithDebInfo
+            kokkos_enable_serial: "ON"
+            kokkos_enable_openmp: "OFF"
+            krepe_enable_asan: ON
+            krepe_enable_ubsan: OFF
+            ctest_args: -L sanitizer_compatible
+        - kokkos_version: "5.1.0"
+          configuration:
+            name: clang UBSan build and tests
+            compiler: clang-ubsan
+            cxx: clang++
+            build_type: RelWithDebInfo
+            kokkos_enable_serial: "ON"
+            kokkos_enable_openmp: "OFF"
+            krepe_enable_asan: OFF
+            krepe_enable_ubsan: ON
+            ctest_args: -L sanitizer_compatible
+        - kokkos_version: "5.1.0"
+          configuration:
+            name: gcc OpenMP Release build and tests
+            compiler: gcc-openmp
+            cxx: g++
+            build_type: Release
+            kokkos_enable_serial: "OFF"
+            kokkos_enable_openmp: "ON"
+            krepe_enable_asan: OFF
+            krepe_enable_ubsan: OFF
+            ctest_args: ''
+            test_installation: true
 
     env:
       CXX: ${{ matrix.configuration.cxx }}
       Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.kokkos_version }}-${{ matrix.configuration.compiler }}
       KOKKOS_VERSION: ${{ matrix.kokkos_version }}
+      OMP_NUM_THREADS: "2"
       krepe_ROOT: ${{ github.workspace }}/krepe_install
 
     steps:
@@ -93,7 +122,8 @@ jobs:
           echo "ImageOS=${ImageOS:-unknown}"
           echo "ImageVersion=${ImageVersion:-unknown}"
           echo "KOKKOS_VERSION=$KOKKOS_VERSION"
-          echo "Kokkos_ENABLE_SERIAL=ON"
+          echo "Kokkos_ENABLE_SERIAL=${{ matrix.configuration.kokkos_enable_serial }}"
+          echo "Kokkos_ENABLE_OPENMP=${{ matrix.configuration.kokkos_enable_openmp }}"
           echo "matrix.compiler=${{ matrix.configuration.compiler }}"
           echo "CMAKE_BUILD_TYPE=${{ matrix.configuration.build_type }}"
           echo "CXX=$CXX"
@@ -118,7 +148,8 @@ jobs:
           -DCMAKE_BUILD_TYPE="${{ matrix.configuration.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
-          -DKokkos_ENABLE_SERIAL=ON
+          -DKokkos_ENABLE_SERIAL="${{ matrix.configuration.kokkos_enable_serial }}" \
+          -DKokkos_ENABLE_OPENMP="${{ matrix.configuration.kokkos_enable_openmp }}"
         cmake --build kokkos-build --parallel "$(nproc)"
         cmake --install kokkos-build
 
@@ -138,6 +169,10 @@ jobs:
 
     - name: Run tests
       run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.configuration.ctest_args }}
+
+    - name: Verify OpenMP execution space
+      if: matrix.configuration.kokkos_enable_openmp == 'ON'
+      run: h5dump -a /policy/space build/tests/work/range_policy/*_in.h5 | grep -F '"OpenMP"'
 
     - name: Install the project
       if: ${{ matrix.configuration.test_installation }}
