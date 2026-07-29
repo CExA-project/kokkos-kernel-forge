@@ -35,12 +35,12 @@
 #include <malloc.h>
 #endif
 
-#if defined(KKF_ENABLE_CUDA_DUMP)
+#if defined(KREPE_ENABLE_CUDA_DUMP)
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 #endif
 
-#if defined(KKF_ENABLE_HIP_DUMP)
+#if defined(KREPE_ENABLE_HIP_DUMP)
 #include <hip/hip_runtime_api.h>
 #endif
 
@@ -102,14 +102,14 @@ bool is_internal_label(std::string_view label) {
          label.starts_with("KOKKOS_") || label.starts_with("kokkos.");
 }
 
-#if defined(KKF_ENABLE_CUDA_DUMP)
-bool is_cuda_range_query_space(const std::string& space) {
+#if defined(KREPE_ENABLE_CUDA_DUMP)
+bool is_cuda_pointer_attribute_space(const std::string& space) {
   return space == "Cuda" || space == "CudaUVM" || space == "CudaHostPinned";
 }
 #endif
 
-#if defined(KKF_ENABLE_HIP_DUMP)
-bool is_hip_range_query_space(const std::string& space) {
+#if defined(KREPE_ENABLE_HIP_DUMP)
+bool is_hip_pointer_attribute_space(const std::string& space) {
   return space == "HIP" || space == "HIPManaged" || space == "HIPHostPinned";
 }
 #endif
@@ -229,26 +229,34 @@ std::optional<std::uint64_t> validated_data_size(
 std::optional<std::uint64_t> allocation_data_size(
     const std::string& space, const void* ptr, const void* data_ptr,
     const std::uint64_t reported_size) {
-#if defined(KKF_ENABLE_CUDA_DUMP)
-  if (is_cuda_range_query_space(space)) {
-    CUdeviceptr allocation_base = 0;
-    std::size_t allocation_size = 0;
-    const CUresult error        = cuMemGetAddressRange(
-        &allocation_base, &allocation_size, reinterpret_cast<CUdeviceptr>(ptr));
-    if (error == CUDA_SUCCESS) {
+#if defined(KREPE_ENABLE_CUDA_DUMP)
+  if (is_cuda_pointer_attribute_space(space)) {
+    CUdeviceptr allocation_base       = 0;
+    std::size_t allocation_size       = 0;
+    const CUdeviceptr queried_pointer = reinterpret_cast<CUdeviceptr>(ptr);
+    const CUresult base_error         = cuPointerGetAttribute(
+        &allocation_base, CU_POINTER_ATTRIBUTE_RANGE_START_ADDR,
+        queried_pointer);
+    const CUresult size_error = cuPointerGetAttribute(
+        &allocation_size, CU_POINTER_ATTRIBUTE_RANGE_SIZE, queried_pointer);
+    if (base_error == CUDA_SUCCESS && size_error == CUDA_SUCCESS) {
       return validated_data_size(reinterpret_cast<const void*>(allocation_base),
                                  allocation_size, data_ptr, reported_size);
     }
   }
 #endif
 
-#if defined(KKF_ENABLE_HIP_DUMP)
-  if (is_hip_range_query_space(space)) {
-    void* allocation_base       = nullptr;
-    std::size_t allocation_size = 0;
-    const hipError_t error      = hipMemGetAddressRange(
-        &allocation_base, &allocation_size, const_cast<void*>(ptr));
-    if (error == hipSuccess) {
+#if defined(KREPE_ENABLE_HIP_DUMP)
+  if (is_hip_pointer_attribute_space(space)) {
+    hipDeviceptr_t allocation_base       = nullptr;
+    std::size_t allocation_size          = 0;
+    const hipDeviceptr_t queried_pointer = const_cast<void*>(ptr);
+    const hipError_t base_error          = hipPointerGetAttribute(
+        &allocation_base, HIP_POINTER_ATTRIBUTE_RANGE_START_ADDR,
+        queried_pointer);
+    const hipError_t size_error = hipPointerGetAttribute(
+        &allocation_size, HIP_POINTER_ATTRIBUTE_RANGE_SIZE, queried_pointer);
+    if (base_error == hipSuccess && size_error == hipSuccess) {
       return validated_data_size(allocation_base, allocation_size, data_ptr,
                                  reported_size);
     }
