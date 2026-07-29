@@ -172,7 +172,7 @@ jobs:
 
     - name: Verify OpenMP execution space
       if: matrix.configuration.kokkos_enable_openmp == 'ON'
-      run: h5dump -a /policy/space build/tests/work/range_policy/*_in.h5 | grep -F '"OpenMP"'
+      run: h5dump -a /policy/space build/tests/range_policy/work/range_policy/*_in.h5 | grep -F '"OpenMP"'
 
     - name: Install the project
       if: ${{ matrix.configuration.test_installation }}
