@@ -13,8 +13,7 @@ target_link_libraries(empty_view_without_extent PRIVATE krepe_warnings krepe_san
 
 add_executable(empty_view_without_extent_replay without_extent_replay_main.cpp)
 target_link_libraries(
-  empty_view_without_extent_replay PRIVATE krepe_warnings krepe_sanitizers Kokkos::kokkos
-                                           kernel_replayer_sanitized
+  empty_view_without_extent_replay PRIVATE krepe_warnings krepe_sanitizers Kokkos::kokkos kernel_replayer_sanitized
 )
 
 add_replay_test(empty_view_without_extent FALSE)
