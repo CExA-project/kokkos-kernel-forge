@@ -44,6 +44,14 @@ std::string allocate_staging_buffer(const ActiveAllocation& allocation,
 
 std::string copy_allocation_bytes(const ActiveAllocation& allocation,
                                   std::vector<unsigned char>& bytes) {
+  if (!allocation.record.data_size_known) {
+    return "allocation data size could not be bounded safely";
+  }
+  if (allocation.record.size == 0) {
+    bytes.clear();
+    return {};
+  }
+
   const std::string& space   = allocation.record.space;
   const bool host_accessible = is_host_accessible_space(space);
   const bool cuda_device     = is_cuda_device_space(space);
@@ -51,9 +59,6 @@ std::string copy_allocation_bytes(const ActiveAllocation& allocation,
 
   if (!host_accessible && !cuda_device && !hip_device) {
     return "memory space is not supported for raw byte dumps";
-  }
-  if (!allocation.record.data_size_known) {
-    return "allocation data size could not be bounded safely";
   }
 #if !defined(KREPE_ENABLE_CUDA_DUMP)
   if (cuda_device) {
