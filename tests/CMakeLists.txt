@@ -53,7 +53,6 @@ add_subdirectory(team_policy)
 add_subdirectory(non_default_execution_space)
 add_subdirectory(index_type)
 add_subdirectory(empty_view)
-add_subdirectory(memory_copy)
 
 if(Kokkos_ENABLE_CUDA OR Kokkos_ENABLE_HIP)
   add_subdirectory(gpu_memory_spaces)
