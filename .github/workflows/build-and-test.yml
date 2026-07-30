@@ -33,6 +33,7 @@ jobs:
         kokkos_version:
         - "5.0.0"
         - "5.1.0"
+        - "5.2.0"
         configuration:
         - name: gcc Release build and tests
           compiler: gcc
@@ -57,7 +58,7 @@ jobs:
         # Run extended coverage only for the latest supported version. Update
         # every include entry when rolling the matrix forward.
         include:
-        - kokkos_version: "5.1.0"
+        - kokkos_version: "5.2.0"
           configuration:
             name: clang ASan build and tests
             compiler: clang-asan
@@ -68,7 +69,7 @@ jobs:
             krepe_enable_asan: ON
             krepe_enable_ubsan: OFF
             ctest_args: -L sanitizer_compatible
-        - kokkos_version: "5.1.0"
+        - kokkos_version: "5.2.0"
           configuration:
             name: clang UBSan build and tests
             compiler: clang-ubsan
@@ -79,7 +80,7 @@ jobs:
             krepe_enable_asan: OFF
             krepe_enable_ubsan: ON
             ctest_args: -L sanitizer_compatible
-        - kokkos_version: "5.1.0"
+        - kokkos_version: "5.2.0"
           configuration:
             name: gcc OpenMP Release build and tests
             compiler: gcc-openmp
