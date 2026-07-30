@@ -233,6 +233,9 @@ std::optional<std::uint64_t> allocation_data_size(
     return 0;
   }
 
+  // Kokkos <= 5.2.0 reports the SharedAllocationHeader size instead of zero
+  // for empty Views (kokkos/kokkos#9337). Disambiguate that legacy value using
+  // the physical allocation bounds below.
   if (reported_size != KREPE_KOKKOS_ALLOCATION_HEADER_SIZE) {
     return reported_size;
   }
