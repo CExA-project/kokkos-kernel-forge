@@ -22,18 +22,25 @@ concurrency:
 
 jobs:
   cmake:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.configuration.name }} with Kokkos ${{ matrix.kokkos_version }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
-        include:
+        # Keep Release coverage for every supported Kokkos version.
+        kokkos_version:
+        - "5.0.0"
+        - "5.1.0"
+        - "5.2.0"
+        configuration:
         - name: gcc Release build and tests
           compiler: gcc
           cxx: g++
           build_type: Release
+          kokkos_enable_serial: "ON"
+          kokkos_enable_openmp: "OFF"
           krepe_enable_asan: OFF
           krepe_enable_ubsan: OFF
           ctest_args: ''
@@ -42,29 +49,55 @@ jobs:
           compiler: clang
           cxx: clang++
           build_type: Release
+          kokkos_enable_serial: "ON"
+          kokkos_enable_openmp: "OFF"
           krepe_enable_asan: OFF
           krepe_enable_ubsan: OFF
           ctest_args: ''
           test_installation: true
-        - name: clang ASan build and tests
-          compiler: clang-asan
-          cxx: clang++
-          build_type: RelWithDebInfo
-          krepe_enable_asan: ON
-          krepe_enable_ubsan: OFF
-          ctest_args: -L sanitizer_compatible
-        - name: clang UBSan build and tests
-          compiler: clang-ubsan
-          cxx: clang++
-          build_type: RelWithDebInfo
-          krepe_enable_asan: OFF
-          krepe_enable_ubsan: ON
-          ctest_args: -L sanitizer_compatible
+        # Run extended coverage only for the latest supported version. Update
+        # every include entry when rolling the matrix forward.
+        include:
+        - kokkos_version: "5.2.0"
+          configuration:
+            name: clang ASan build and tests
+            compiler: clang-asan
+            cxx: clang++
+            build_type: RelWithDebInfo
+            kokkos_enable_serial: "ON"
+            kokkos_enable_openmp: "OFF"
+            krepe_enable_asan: ON
+            krepe_enable_ubsan: OFF
+            ctest_args: -L sanitizer_compatible
+        - kokkos_version: "5.2.0"
+          configuration:
+            name: clang UBSan build and tests
+            compiler: clang-ubsan
+            cxx: clang++
+            build_type: RelWithDebInfo
+            kokkos_enable_serial: "ON"
+            kokkos_enable_openmp: "OFF"
+            krepe_enable_asan: OFF
+            krepe_enable_ubsan: ON
+            ctest_args: -L sanitizer_compatible
+        - kokkos_version: "5.2.0"
+          configuration:
+            name: gcc OpenMP Release build and tests
+            compiler: gcc-openmp
+            cxx: g++
+            build_type: Release
+            kokkos_enable_serial: "OFF"
+            kokkos_enable_openmp: "ON"
+            krepe_enable_asan: OFF
+            krepe_enable_ubsan: OFF
+            ctest_args: ''
+            test_installation: true
 
     env:
-      CXX: ${{ matrix.cxx }}
-      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.compiler }}
-      KOKKOS_VERSION: 5.1.1
+      CXX: ${{ matrix.configuration.cxx }}
+      Kokkos_ROOT: ${{ github.workspace }}/.deps/kokkos-${{ matrix.kokkos_version }}-${{ matrix.configuration.compiler }}
+      KOKKOS_VERSION: ${{ matrix.kokkos_version }}
+      OMP_NUM_THREADS: "2"
       krepe_ROOT: ${{ github.workspace }}/krepe_install
 
     steps:
@@ -90,9 +123,10 @@ jobs:
           echo "ImageOS=${ImageOS:-unknown}"
           echo "ImageVersion=${ImageVersion:-unknown}"
           echo "KOKKOS_VERSION=$KOKKOS_VERSION"
-          echo "Kokkos_ENABLE_SERIAL=ON"
-          echo "matrix.compiler=${{ matrix.compiler }}"
-          echo "CMAKE_BUILD_TYPE=${{ matrix.build_type }}"
+          echo "Kokkos_ENABLE_SERIAL=${{ matrix.configuration.kokkos_enable_serial }}"
+          echo "Kokkos_ENABLE_OPENMP=${{ matrix.configuration.kokkos_enable_openmp }}"
+          echo "matrix.compiler=${{ matrix.configuration.compiler }}"
+          echo "CMAKE_BUILD_TYPE=${{ matrix.configuration.build_type }}"
           echo "CXX=$CXX"
           "$CXX" --version
           cmake --version
@@ -105,46 +139,51 @@ jobs:
       uses: actions/cache@v6
       with:
         path: ${{ env.Kokkos_ROOT }}
-        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
+        key: kokkos-${{ runner.os }}-${{ runner.arch }}-${{ env.KOKKOS_VERSION }}-${{ matrix.configuration.compiler }}-${{ hashFiles('.kokkos-cache-fingerprint') }}
 
     - name: Build and install Kokkos
       if: steps.cache-kokkos.outputs.cache-hit != 'true'
       run: |
         git clone --depth 1 --branch "$KOKKOS_VERSION" https://github.com/kokkos/kokkos.git kokkos-src
         cmake -S kokkos-src -B kokkos-build -G Ninja \
-          -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
+          -DCMAKE_BUILD_TYPE="${{ matrix.configuration.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_INSTALL_PREFIX="$Kokkos_ROOT" \
-          -DKokkos_ENABLE_SERIAL=ON
+          -DKokkos_ENABLE_SERIAL="${{ matrix.configuration.kokkos_enable_serial }}" \
+          -DKokkos_ENABLE_OPENMP="${{ matrix.configuration.kokkos_enable_openmp }}"
         cmake --build kokkos-build --parallel "$(nproc)"
         cmake --install kokkos-build
 
     - name: Configure project
       run: |
         cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE="${{ matrix.build_type }}" \
+          -DCMAKE_BUILD_TYPE="${{ matrix.configuration.build_type }}" \
           -DCMAKE_CXX_COMPILER="$CXX" \
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DKREPE_BUILD_TESTS=ON \
           -DKREPE_ENABLE_WARNINGS=ON \
-          -DKREPE_ENABLE_ASAN="${{ matrix.krepe_enable_asan }}" \
-          -DKREPE_ENABLE_UBSAN="${{ matrix.krepe_enable_ubsan }}"
+          -DKREPE_ENABLE_ASAN="${{ matrix.configuration.krepe_enable_asan }}" \
+          -DKREPE_ENABLE_UBSAN="${{ matrix.configuration.krepe_enable_ubsan }}"
 
     - name: Build project
       run: cmake --build build --parallel "$(nproc)"
 
     - name: Run tests
-      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.ctest_args }}
+      run: ctest --test-dir build --output-on-failure --no-tests=error --parallel "$(nproc)" ${{ matrix.configuration.ctest_args }}
+
+    - name: Verify OpenMP execution space
+      if: matrix.configuration.kokkos_enable_openmp == 'ON'
+      run: h5dump -a /policy/space build/tests/range_policy/work/range_policy/*_in.h5 | grep -F '"OpenMP"'
 
     - name: Install the project
-      if: ${{ matrix.test_installation }}
+      if: ${{ matrix.configuration.test_installation }}
       run: cmake --install build --prefix "$krepe_ROOT"
 
     - name: Test the installation
-      if: ${{ matrix.test_installation }}
+      if: ${{ matrix.configuration.test_installation }}
       working-directory: ${{ github.workspace }}/tests/install_test
       run: |
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.configuration.build_type }}
         cmake --build build --parallel "$(nproc)"
         KOKKOS_TOOLS_LIBS="$krepe_ROOT/lib/libkrepe.so" KOKKOS_TOOLS_ARGS=--krepe-dump-kernel-label=test_kernel ./build/test
         ./build/replay_test --kernel-replayer-dump *_in.h5 --kernel-replayer-out-dump *_out.h5
