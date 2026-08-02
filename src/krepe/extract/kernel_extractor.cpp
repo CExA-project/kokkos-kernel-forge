@@ -1,4 +1,5 @@
 #include "kernel_extractor.hpp"
+#include <iostream>
 #if defined(KOKKOS_ENABLE_LIBDL)
 #include <dlfcn.h>
 #endif
@@ -147,6 +148,8 @@ bool next_invocation_will_dump(const char* kernel_name) {
   init_internal_functions();
   return next_invocation_will_dump_function(kernel_name);
 }
+
+void register_view(void* data) { std::cout << "Registering " << data << '\n'; }
 
 }  // namespace impl
 
