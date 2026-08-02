@@ -149,7 +149,10 @@ bool next_invocation_will_dump(const char* kernel_name) {
   return next_invocation_will_dump_function(kernel_name);
 }
 
-void register_view(void* data) { std::cout << "Registering " << data << '\n'; }
+void register_view(void* data, bool is_host) {
+  std::cout << "Registering " << (is_host ? "host" : "device") << " pointer "
+            << data << '\n';
+}
 
 }  // namespace impl
 

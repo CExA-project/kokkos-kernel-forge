@@ -17,6 +17,8 @@ struct ViewInfo {
   tree func_decl_data = NULL_TREE;
   // The component_ref that references the view on which data() will be called
   tree component_ref = NULL_TREE;
+  // The TYPE_DECL for the View's memory space
+  tree memory_space = NULL_TREE;
 };
 
 void visit(std::vector<ViewInfo>& views, tree root, tree node);
@@ -32,15 +34,21 @@ bool visit_view(std::vector<ViewInfo>& views, tree root, tree node) {
     return false;
   }
 
-  tree data = lookup_qualified_name(TREE_TYPE(root), "data", LOOK_want::NORMAL);
-
-  if (data) {
-    views.emplace_back(data, root);
-    return true;
+  tree data = lookup_qualified_name(node, "data", LOOK_want::NORMAL);
+  if (!data) {
+    std::cerr << "ERROR: Failed to find the data method of Kokkos::View\n";
+    abort();
   }
 
-  std::cerr << "ERROR: Failed to find the data method of Kokkos::View\n";
-  abort();
+  tree memory_space =
+      lookup_qualified_name(node, "memory_space", LOOK_want::TYPE);
+  if (!memory_space) {
+    std::cerr << "ERROR: Failed to find the memory_space of Kokkos::View\n";
+    abort();
+  }
+
+  views.emplace_back(data, root, memory_space);
+  return true;
 }
 
 void visit_record(std::vector<ViewInfo>& views, tree root, tree record) {
@@ -55,8 +63,8 @@ void visit_record(std::vector<ViewInfo>& views, tree root, tree record) {
 
 // We iterate recursively on the functor type to get the view it and its
 // subobject contain
-// NOTE: we assume that the functor or its subobject do not cotain references to
-// views, or if they do, those are references to other views contained in the
+// NOTE: we assume that the functor or its subobject do not contain references
+// to views, or if they do, those are references to other views contained in the
 // functor
 void visit(std::vector<ViewInfo>& views, tree root, tree node) {
   switch (TREE_CODE(node)) {
@@ -148,7 +156,21 @@ void ast_callback(void* gcc_data, void* user_data) {
   tree register_view =
       lookup_qualified_name(impl_ns, "register_view", LOOK_want::NORMAL);
   if (!register_view || TREE_CODE(register_view) != FUNCTION_DECL) {
-    std::cerr << "ERROR: failed to find the krepe::impl::register_view\n";
+    std::cerr << "ERROR: failed to find krepe::impl::register_view\n";
+    abort();
+  }
+
+  tree kokkos_ns =
+      lookup_qualified_name(global_namespace, "Kokkos", LOOK_want::NAMESPACE);
+  if (!kokkos_ns) {
+    std::cerr << "ERROR: failed to find the Kokkos namespace\n";
+    abort();
+  }
+
+  tree host_space =
+      lookup_qualified_name(kokkos_ns, "HostSpace", LOOK_want::TYPE);
+  if (!host_space) {
+    std::cerr << "ERROR: failed to find the Kokkos::HostSpace\n";
     abort();
   }
 
@@ -156,14 +178,18 @@ void ast_callback(void* gcc_data, void* user_data) {
 
   tree_stmt_iterator it = tsi_start(if_body);
 
-  for (auto [fn, arg] : views) {
+  for (auto [fn, arg, memory_space] : views) {
     tree this_pointer = build_address(arg);
     tree data_expr    = build_call_n(fn, 1, this_pointer);
 
+    tree is_host_pointer =
+        build_int_cst(boolean_type_node,
+                      static_cast<bool>(same_type_p(TREE_TYPE(host_space),
+                                                    TREE_TYPE(memory_space))));
+
     tree casted_data = build_c_cast(UNKNOWN_LOCATION, void_ptr_type, data_expr);
-    tree call_expr   = build_call_n(
-        register_view, 2, casted_data,
-        build_c_cast(UNKNOWN_LOCATION, void_ptr_type, build_address(args)));
+    tree call_expr =
+        build_call_n(register_view, 2, casted_data, is_host_pointer);
 
     tree cleanup_expr               = build_nt(CLEANUP_POINT_EXPR, call_expr);
     TREE_TYPE(cleanup_expr)         = void_type_node;
