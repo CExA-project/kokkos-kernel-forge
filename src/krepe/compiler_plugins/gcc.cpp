@@ -13,12 +13,14 @@
 int plugin_is_GPL_compatible;
 
 struct ViewInfo {
-  // The declaration of View::data()
-  tree func_decl_data = NULL_TREE;
   // The component_ref that references the view on which data() will be called
   tree component_ref = NULL_TREE;
+  // The declaration of View::data()
+  tree view_data_func = NULL_TREE;
   // The TYPE_DECL for the View's memory space
   tree memory_space = NULL_TREE;
+  // The declaration of memory_space::name()
+  tree space_name_func = NULL_TREE;
 };
 
 void visit(std::vector<ViewInfo>& views, tree root, tree node);
@@ -34,8 +36,8 @@ bool visit_view(std::vector<ViewInfo>& views, tree root, tree node) {
     return false;
   }
 
-  tree data = lookup_qualified_name(node, "data", LOOK_want::NORMAL);
-  if (!data) {
+  tree data_function = lookup_qualified_name(node, "data", LOOK_want::NORMAL);
+  if (!data_function) {
     std::cerr << "ERROR: Failed to find the data method of Kokkos::View\n";
     abort();
   }
@@ -47,7 +49,14 @@ bool visit_view(std::vector<ViewInfo>& views, tree root, tree node) {
     abort();
   }
 
-  views.emplace_back(data, root, memory_space);
+  tree name_function =
+      lookup_qualified_name(TREE_TYPE(memory_space), "name", LOOK_want::NORMAL);
+  if (!name_function) {
+    std::cerr << "ERROR: Failed to find the name method of a memory space\n";
+    abort();
+  }
+
+  views.emplace_back(root, data_function, memory_space, name_function);
   return true;
 }
 
@@ -178,18 +187,21 @@ void ast_callback(void* gcc_data, void* user_data) {
 
   tree_stmt_iterator it = tsi_start(if_body);
 
-  for (auto [fn, arg, memory_space] : views) {
-    tree this_pointer = build_address(arg);
-    tree data_expr    = build_call_n(fn, 1, this_pointer);
+  for (auto [view_instance, data_fn, memory_space, space_name_fn] : views) {
+    tree data_expr =
+        build_new_method_call(view_instance, data_fn, nullptr, NULL_TREE,
+                              LOOKUP_NORMAL, nullptr, tf_warning_or_error);
 
-    tree is_host_pointer =
-        build_int_cst(boolean_type_node,
-                      static_cast<bool>(same_type_p(TREE_TYPE(host_space),
-                                                    TREE_TYPE(memory_space))));
+    tree name_expr =
+        build_new_method_call(memory_space, space_name_fn, nullptr, NULL_TREE,
+                              LOOKUP_NORMAL, nullptr, tf_warning_or_error);
 
     tree casted_data = build_c_cast(UNKNOWN_LOCATION, void_ptr_type, data_expr);
+    releasing_vec args;
+    vec_safe_push(args, casted_data);
+    vec_safe_push(args, name_expr);
     tree call_expr =
-        build_call_n(register_view, 2, casted_data, is_host_pointer);
+        build_new_function_call(register_view, &args, tf_warning_or_error);
 
     tree cleanup_expr               = build_nt(CLEANUP_POINT_EXPR, call_expr);
     TREE_TYPE(cleanup_expr)         = void_type_node;
