@@ -1,20 +1,38 @@
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-  return()
+add_library(krepe_plugin_dep INTERFACE)
+install(TARGETS krepe_plugin_dep EXPORT krepeTargets)
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
+  include("${PROJECT_SOURCE_DIR}/cmake/gcc_plugin_headers.cmake")
+
+  if(NOT TARGET gcc-plugin-headers)
+    return()
+  endif()
+
+  add_library(krepe_gcc_plugin SHARED gcc.cpp)
+  target_link_libraries(krepe_gcc_plugin PRIVATE gcc-plugin-headers)
+  target_compile_options(krepe_gcc_plugin PRIVATE "-fno-rtti")
+  set_target_properties(krepe_gcc_plugin PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
+  # Since We cannot create a direct depency to the plugin using
+  # target_link_libraries, we crate a custom command depending on the plugin
+  # which creates a header that gets included in kernel_extractor.hpp. This
+  # results in a dependency chain like this:
+  #   exe -> extractor -> dummy header -> plugin
+  # The header will be regenerated if the plugin needs to be rebuilt, which will
+  # lead to a recompilation of the executables
+  set(DUMMY_PLUGIN_HEADER "${CMAKE_BINARY_DIR}/dummy.h")
+  add_custom_command(
+    OUTPUT "${DUMMY_PLUGIN_HEADER}" COMMAND cmake -E touch "${DUMMY_PLUGIN_HEADER}" DEPENDS krepe_gcc_plugin
+  )
+  add_custom_target(dummy "" DEPENDS "${DUMMY_PLUGIN_HEADER}")
+  target_compile_definitions(
+    krepe_plugin_dep INTERFACE $<BUILD_INTERFACE:KREPE_DUMMY_PLUGIN_HEADER="${DUMMY_PLUGIN_HEADER}">
+  )
+  target_compile_options(
+    krepe_plugin_dep INTERFACE $<BUILD_INTERFACE:-fplugin=$<TARGET_FILE:krepe_gcc_plugin>>
+                               $<INSTALL_INTERFACE:-fplugin=${CMAKE_INSTALL_FULL_LIBDIR}/libkrepe_gcc_plugin.so>
+  )
+  add_dependencies(krepe_plugin_dep dummy)
+
+  install(TARGETS krepe_gcc_plugin)
 endif()
-
-execute_process(COMMAND gcc -print-file-name=plugin OUTPUT_VARIABLE GCC_PLUGIN_DIR_)
-string(STRIP "${GCC_PLUGIN_DIR_}" GCC_PLUGIN_DIR)
-if(GCC_PLUGIN_DIR STREQUAL "plugin")
-  message(WARNING "This installation of GCC doesn't support plugins")
-  return()
-endif()
-
-set(KREPE_HAS_GCC_PLUGIN TRUE PARENT_SCOPE)
-
-add_library(krepe_gcc_plugin SHARED)
-target_sources(krepe_gcc_plugin PRIVATE gcc.cpp)
-target_include_directories(krepe_gcc_plugin PRIVATE "${GCC_PLUGIN_DIR}/include")
-target_compile_options(krepe_gcc_plugin PRIVATE "-fno-rtti")
-set_target_properties(krepe_gcc_plugin PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
-
-install(TARGETS krepe_gcc_plugin)

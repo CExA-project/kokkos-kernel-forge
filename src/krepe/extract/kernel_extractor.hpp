@@ -5,6 +5,9 @@
 #include <string>
 #include <Kokkos_Core.hpp>
 #include <krepe/common/extended_lambda_utils.hpp>
+#if defined(KREPE_DUMMY_PLUGIN_HEADER)
+#include KREPE_DUMMY_PLUGIN_HEADER
+#endif
 
 namespace krepe {
 namespace impl {
