@@ -229,10 +229,6 @@ std::optional<std::uint64_t> validated_data_size(
 std::optional<std::uint64_t> allocation_data_size(
     const std::string& space, const void* ptr, const void* data_ptr,
     const std::uint64_t reported_size) {
-  if (reported_size == 0) {
-    return 0;
-  }
-
   // Kokkos <= 5.2.0 reports the SharedAllocationHeader size instead of zero
   // for empty Views (kokkos/kokkos#9337). Disambiguate that legacy value using
   // the physical allocation bounds below.
