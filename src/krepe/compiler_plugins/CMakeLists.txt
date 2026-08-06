@@ -25,12 +25,10 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     OUTPUT "${DUMMY_PLUGIN_HEADER}" COMMAND cmake -E touch "${DUMMY_PLUGIN_HEADER}" DEPENDS krepe_gcc_plugin
   )
   add_custom_target(dummy "" DEPENDS "${DUMMY_PLUGIN_HEADER}")
-  target_compile_definitions(
-    krepe_plugin_dep INTERFACE $<BUILD_INTERFACE:KREPE_DUMMY_PLUGIN_HEADER="${DUMMY_PLUGIN_HEADER}">
-  )
   target_compile_options(
-    krepe_plugin_dep INTERFACE $<BUILD_INTERFACE:-fplugin=$<TARGET_FILE:krepe_gcc_plugin>>
-                               $<INSTALL_INTERFACE:-fplugin=${CMAKE_INSTALL_FULL_LIBDIR}/libkrepe_gcc_plugin.so>
+    krepe_plugin_dep
+    INTERFACE $<BUILD_INTERFACE:-fplugin=$<TARGET_FILE:krepe_gcc_plugin>;-include;${DUMMY_PLUGIN_HEADER}>
+              $<INSTALL_INTERFACE:-fplugin=${CMAKE_INSTALL_FULL_LIBDIR}/libkrepe_gcc_plugin.so>
   )
   add_dependencies(krepe_plugin_dep dummy)
 
