@@ -31,6 +31,19 @@
 #include <variant>
 #include <vector>
 
+#if defined(__linux__)
+#include <malloc.h>
+#endif
+
+#if defined(KREPE_ENABLE_CUDA_DUMP)
+#include <cuda.h>
+#include <cuda_runtime_api.h>
+#endif
+
+#if defined(KREPE_ENABLE_HIP_DUMP)
+#include <hip/hip_runtime_api.h>
+#endif
+
 #define KOKKOS_HOOKS_EXPORT __attribute__((visibility("default")))
 
 #if !defined(KREPE_KOKKOS_ALLOCATION_HEADER_SIZE)
@@ -88,6 +101,20 @@ bool is_internal_label(std::string_view label) {
          label.starts_with("NextSiliconSpace::") ||
          label.starts_with("KOKKOS_") || label.starts_with("kokkos.");
 }
+
+#if defined(KREPE_ENABLE_CUDA_DUMP)
+bool is_cuda_pointer_attribute_space(const std::string& space) {
+  return space == "Cuda" || space == "CudaUVM" || space == "CudaHostPinned";
+}
+#endif
+
+#if defined(KREPE_ENABLE_HIP_DUMP)
+bool is_hip_pointer_attribute_space(const std::string& space) {
+  return space == "HIP" || space == "HIPManaged" || space == "HIPHostPinned";
+}
+#endif
+
+bool is_host_space(const std::string& space) { return space == "Host"; }
 
 std::string bounded_string(const char* value, std::size_t max_size) {
   if (value == nullptr) {
@@ -164,6 +191,93 @@ bool should_track_allocation(const char* label, const void* ptr) {
 const void* allocation_data_pointer(const void* ptr) {
   return static_cast<const unsigned char*>(ptr) +
          KREPE_KOKKOS_ALLOCATION_HEADER_SIZE;
+}
+
+std::size_t host_allocation_size(const void* ptr) {
+#if defined(__linux__)
+  // The allocator may reserve more memory than Kokkos requested, so
+  // malloc_usable_size(ptr) can return a larger size than the requested one.
+  return malloc_usable_size(const_cast<void*>(ptr));
+#else
+  (void)ptr;
+  return 0;
+#endif
+}
+
+std::optional<std::uint64_t> validated_data_size(
+    const void* allocation_base, const std::size_t allocation_size,
+    const void* data_ptr, const std::uint64_t reported_size) {
+  const auto base = reinterpret_cast<std::uintptr_t>(allocation_base);
+  const auto data = reinterpret_cast<std::uintptr_t>(data_ptr);
+  if (data < base) {
+    return std::nullopt;
+  }
+
+  const auto offset = data - base;
+  if (offset > allocation_size) {
+    return std::nullopt;
+  }
+
+  if (offset == allocation_size) {
+    return 0;
+  }
+
+  const auto available = static_cast<std::uint64_t>(allocation_size - offset);
+  return available >= reported_size ? reported_size : 0;
+}
+
+std::optional<std::uint64_t> allocation_data_size(
+    const std::string& space, const void* ptr, const void* data_ptr,
+    const std::uint64_t reported_size) {
+  // Kokkos <= 5.2.0 reports the SharedAllocationHeader size instead of zero
+  // for empty Views (kokkos/kokkos#9337). Disambiguate that legacy value using
+  // the physical allocation bounds below.
+  if (reported_size != KREPE_KOKKOS_ALLOCATION_HEADER_SIZE) {
+    return reported_size;
+  }
+
+#if defined(KREPE_ENABLE_CUDA_DUMP)
+  if (is_cuda_pointer_attribute_space(space)) {
+    CUdeviceptr allocation_base       = 0;
+    std::size_t allocation_size       = 0;
+    const CUdeviceptr queried_pointer = reinterpret_cast<CUdeviceptr>(ptr);
+    const CUresult base_error         = cuPointerGetAttribute(
+        &allocation_base, CU_POINTER_ATTRIBUTE_RANGE_START_ADDR,
+        queried_pointer);
+    const CUresult size_error = cuPointerGetAttribute(
+        &allocation_size, CU_POINTER_ATTRIBUTE_RANGE_SIZE, queried_pointer);
+    if (base_error == CUDA_SUCCESS && size_error == CUDA_SUCCESS) {
+      return validated_data_size(reinterpret_cast<const void*>(allocation_base),
+                                 allocation_size, data_ptr, reported_size);
+    }
+  }
+#endif
+
+#if defined(KREPE_ENABLE_HIP_DUMP)
+  if (is_hip_pointer_attribute_space(space)) {
+    hipDeviceptr_t allocation_base       = nullptr;
+    std::size_t allocation_size          = 0;
+    const hipDeviceptr_t queried_pointer = const_cast<void*>(ptr);
+    const hipError_t base_error          = hipPointerGetAttribute(
+        &allocation_base, HIP_POINTER_ATTRIBUTE_RANGE_START_ADDR,
+        queried_pointer);
+    const hipError_t size_error = hipPointerGetAttribute(
+        &allocation_size, HIP_POINTER_ATTRIBUTE_RANGE_SIZE, queried_pointer);
+    if (base_error == hipSuccess && size_error == hipSuccess) {
+      return validated_data_size(allocation_base, allocation_size, data_ptr,
+                                 reported_size);
+    }
+  }
+#endif
+
+  if (is_host_space(space)) {
+    const std::size_t allocation_size = host_allocation_size(ptr);
+    if (allocation_size != 0) {
+      return validated_data_size(ptr, allocation_size, data_ptr, reported_size);
+    }
+  }
+
+  return std::nullopt;
 }
 
 void begin_kernel(const char* label, const std::uint32_t device_id,
@@ -353,11 +467,16 @@ KOKKOS_HOOKS_EXPORT void kokkosp_allocate_data(
     const void* ptr, const std::uint64_t size) {
   const std::string allocation_label = label_or_unknown(label);
   const std::string allocation_space = space_name(space);
-  const void* p_data = ptr != nullptr ? allocation_data_pointer(ptr) : nullptr;
 
   if (should_track_allocation(label, ptr)) {
+    const void* p_data = allocation_data_pointer(ptr);
+    const std::optional<std::uint64_t> data_size =
+        allocation_data_size(allocation_space, ptr, p_data, size);
+    const std::uint64_t tracked_size = data_size.value_or(0);
+
     allocation_tracker.record_allocation(allocation_label, allocation_space,
-                                         ptr, p_data, size);
+                                         ptr, p_data, tracked_size, size,
+                                         data_size.has_value());
   }
 }
 

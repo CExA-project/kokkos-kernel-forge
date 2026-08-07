@@ -35,7 +35,7 @@ target_compile_definitions(
 if(Kokkos_ENABLE_CUDA)
   find_package(CUDAToolkit REQUIRED)
   target_compile_definitions(krepe_kokkos_hooks PRIVATE KREPE_ENABLE_CUDA_DUMP)
-  target_link_libraries(krepe_kokkos_hooks PRIVATE CUDA::cudart)
+  target_link_libraries(krepe_kokkos_hooks PRIVATE CUDA::cudart CUDA::cuda_driver)
 endif()
 if(Kokkos_ENABLE_HIP)
   target_compile_definitions(krepe_kokkos_hooks PRIVATE KREPE_ENABLE_HIP_DUMP)

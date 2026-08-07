@@ -14,6 +14,8 @@ struct AllocationRecord {
   std::string space;
   const void* p_data;
   std::uint64_t size;
+  std::uint64_t reported_size;
+  bool data_size_known;
 };
 
 struct ActiveAllocation {
@@ -29,7 +31,8 @@ struct AllocationSnapshot {
 class AllocationTracker {
  public:
   void record_allocation(std::string label, std::string space, const void* ptr,
-                         const void* p_data, std::uint64_t size);
+                         const void* p_data, std::uint64_t size,
+                         std::uint64_t reported_size, bool data_size_known);
   void record_deallocation(std::string space, const void* ptr);
 
   AllocationSnapshot snapshot() const;

@@ -299,6 +299,9 @@ herr_t get_hdf5_dataset_alloc_info(hid_t group, const char* name,
 
   std::size_t buffer_size =
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
+  if (buffer_size == 0) {
+    return 0;
+  }
 
   auto allocations = reinterpret_cast<std::set<std::pair<char*, std::size_t>>*>(
       allocation_set);
@@ -340,6 +343,11 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
 
   std::size_t buffer_size =
       std::reduce(dims.begin(), dims.end(), 1, std::multiplies<>{});
+  if (buffer_size == 0) {
+    (*reinterpret_cast<hdf5_iterate_fun_t*>(allocate_fun))(label, space,
+                                                           nullptr, nullptr, 0);
+    return 0;
+  }
 
   MemorySpaceType memory_space = memory_space_type_from_string(space);
   auto free_buffer             = [memory_space](char* ptr) {
@@ -667,6 +675,17 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
              char* data, std::size_t size) {
         impl::MemorySpaceType space =
             impl::memory_space_type_from_string(memory_space);
+        if (size == 0) {
+          if (space == impl::MemorySpaceType::HOST) {
+            host_allocations[label] = nullptr;
+          } else {
+#if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+            device_allocations[label] = nullptr;
+#endif
+          }
+          return;
+        }
+
         impl::copy_data(space, address, data, size);
         if (space == impl::MemorySpaceType::HOST) {
           host_allocations[label] = address;
@@ -750,17 +769,21 @@ void ScopeGuard::allocate(impl::MemorySpaceType memory_space, char* address,
 void ScopeGuard::allocate_output(std::string label,
                                  std::string_view memory_space, char* data,
                                  std::size_t size) {
+  if (size == 0) {
+    return;
+  }
+
   if (impl::memory_space_type_from_string(memory_space) ==
       impl::MemorySpaceType::HOST) {
-    host_output_allocations.insert(
-        {label, impl::regular_host_allocate(size, data)});
+    host_output_allocations.insert_or_assign(
+        label, impl::regular_host_allocate(size, data));
   } else {
 #if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
     throw std::runtime_error(
         "Trying to access device allocations but no device space is enabled");
 #else
-    device_output_allocations.insert(
-        {label, impl::regular_device_allocate(size, data)});
+    device_output_allocations.insert_or_assign(
+        label, impl::regular_device_allocate(size, data));
 #endif
   }
 }
