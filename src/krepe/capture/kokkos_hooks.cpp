@@ -425,8 +425,12 @@ KOKKOS_HOOKS_EXPORT bool krepe_kernel_dump_next_invocation_will_dump(
 }
 
 KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_view(void* data,
-                                                         const char* space) {
-  std::cout << "Registering " << data << " for " << space << '\n';
+                                                         const char* space,
+                                                         bool clear) {
+  if (clear) {
+    allocation_tracker.clear_used_allocations();
+  }
+  allocation_tracker.record_used_allocation(space, data);
 }
 
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(

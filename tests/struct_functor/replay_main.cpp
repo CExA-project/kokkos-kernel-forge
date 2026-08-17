@@ -4,12 +4,13 @@
 
 struct Functor {
  private:
+  using view_t = Kokkos::View<int*>;
+
   int factor;
-  Kokkos::View<int*> values;
+  view_t values;
 
  public:
-  Functor(int factor, Kokkos::View<int*> values)
-      : factor(factor), values(values) {}
+  Functor(int factor, view_t values) : factor(factor), values(values) {}
 
   KOKKOS_FUNCTION void operator()(int i) const { values(i) *= factor; }
 };

@@ -16,6 +16,12 @@ option(KREPE_BUILD_TESTS "Build KREPE tests" OFF)
 option(KREPE_ENABLE_WARNINGS "Enable compiler warning options for KREPE targets" ON)
 option(KREPE_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
 option(KREPE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
+option(KREPE_ENABLE_COMPILER_PLUGINS "Enable the use of compiler plugins if the CXX compiler supports them" ON)
+option(
+  KREPE_BUILD_GCC_PLUGIN_HEADERS_IF_NEEDED
+  "Generate the necessary headers to build a gcc plugin if the CXX compiler is GCC and supports plugin but doesn't provide the headers"
+  OFF
+)
 
 add_library(krepe_warnings INTERFACE)
 

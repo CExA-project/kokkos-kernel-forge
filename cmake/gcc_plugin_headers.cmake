@@ -1,6 +1,12 @@
-set(GCC_EXE "${CMAKE_CXX_COMPILER}")
+if(KREPE_CXX_COMPILER_IS_NVCC)
+  # NOTE: This should be modified if we ever need to call the host gcc with multiple flags
+  set(GCC_EXE "${CMAKE_CXX_COMPILER};-c;-x;c++;/dev/null;-Xcompiler")
+else()
+  set(GCC_EXE "${CMAKE_CXX_COMPILER}")
+endif()
+
 execute_process(
-  COMMAND "${GCC_EXE}" -print-file-name=plugin OUTPUT_VARIABLE GCC_PLUGIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+  COMMAND ${GCC_EXE} -print-file-name=plugin OUTPUT_VARIABLE GCC_PLUGIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 if("${GCC_PLUGIN_DIR}" STREQUAL plugin OR NOT EXISTS "${GCC_PLUGIN_DIR}")
   message(WARNING "Your GCC installation does not support plugins")
@@ -16,7 +22,7 @@ endif()
 if(NOT GCC_HAS_PLUGIN_HEADERS AND NOT KREPE_BUILD_GCC_PLUGIN_HEADERS_IF_NEEDED)
   message(
     WARNING
-      "Your GCC installation supports plugins, but the plugin headers cannot be found. You can enable generating the missing plugin headers with -DKREPE_BUILD_GCC_PLUGIN_HEADERS_IF_NEEDED=ON"
+      "Your GCC installation supports plugins, but the plugin headers cannot be found. You can install the necessary package or enable generating the missing plugin headers with -DKREPE_BUILD_GCC_PLUGIN_HEADERS_IF_NEEDED=ON"
   )
   return()
 endif()
@@ -35,10 +41,10 @@ message(
 
 include(ExternalProject)
 
-execute_process(COMMAND gcc -dumpfullversion OUTPUT_VARIABLE GCC_VERSION_ OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${GCC_EXE} -dumpfullversion OUTPUT_VARIABLE GCC_VERSION_ OUTPUT_STRIP_TRAILING_WHITESPACE)
 string(REGEX REPLACE [[[0-9]+$]] "0" GCC_VERSION "${GCC_VERSION_}")
 
-execute_process(COMMAND gcc -dumpmachine OUTPUT_VARIABLE GCC_TARGET OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${GCC_EXE} -dumpmachine OUTPUT_VARIABLE GCC_TARGET OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 find_package(PkgConfig)
 

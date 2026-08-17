@@ -61,7 +61,7 @@ bool visit_view(std::vector<ViewInfo>& views, tree root, tree node) {
 }
 
 void visit_record(std::vector<ViewInfo>& views, tree root, tree record) {
-  if (visit_view(views, root, record)) {
+  if (visit_view(views, root, TYPE_MAIN_VARIANT(record))) {
     return;
   }
 
@@ -96,7 +96,7 @@ void ast_callback(void* gcc_data, void* user_data) {
   tree ast = reinterpret_cast<tree>(gcc_data);
 
   if (TREE_CODE(ast) != FUNCTION_DECL ||
-      DECL_NAME(ast) != get_identifier("parallel_for")) {
+      DECL_NAME(ast) != get_identifier("replay_functor")) {
     return;
   }
 
@@ -108,15 +108,9 @@ void ast_callback(void* gcc_data, void* user_data) {
 
   tree args = DECL_ARGUMENTS(ast);
 
-  int nb_args = 0;
-  while (args && ++nb_args < 3) {
-    args = TREE_CHAIN(args);
-  }
-
-  if (nb_args != 3) {
-    std::cerr
-        << "ERROR: krepe::parallel_for is supposed to take 3 arguments, got "
-        << nb_args << '\n';
+  if (!args) {
+    std::cerr << "ERROR: krepe::replay_functor is supposed to take 1 "
+                 "arguments, got 0\n";
     return;
   }
 
@@ -129,31 +123,25 @@ void ast_callback(void* gcc_data, void* user_data) {
   }
 
   if (!functor_type || TREE_CODE(functor_type) != RECORD_TYPE) {
-    std::cerr << "ERROR: Third argument of krepe::parallel_for is not a record "
-                 "type ("
-              << get_tree_code_name(TREE_CODE(functor_type)) << ")\n";
+    std::cerr
+        << "ERROR: the argument for krepe::replay_functor is not a record "
+           "type ("
+        << get_tree_code_name(TREE_CODE(functor_type)) << ")\n";
     abort();
     return;
   }
 
   auto views = get_functor_views(functor_param, functor_type);
 
-  // Logic for modifying the body of krepe::parallel_for. This assumes that the
-  // body is an if statement, with its true branch being a statement list
-  // (several statements and no variable declaration)
+  // Logic for modifying the body of krepe::replay_functor. This assumes that
+  // the body is a statement list (several statements and no variable
+  // declaration)
   tree body = DECL_SAVED_TREE(ast);
-  if (TREE_CODE(body) != IF_STMT) {
-    std::cerr
-        << "ERROR: expected an if statement in krepe::parallel_for, but found ("
-        << get_tree_code_name(TREE_CODE(body)) << ")\n";
-    abort();
-  }
 
-  tree if_body = THEN_CLAUSE(body);
-  if (TREE_CODE(if_body) != STATEMENT_LIST) {
-    std::cerr << "ERROR: expected a statement list in the true branch of "
-                 "krepe::parallel_for's if, but found ("
-              << get_tree_code_name(TREE_CODE(if_body)) << ")\n";
+  if (TREE_CODE(body) != STATEMENT_LIST) {
+    std::cerr << "ERROR: expected a statement list in "
+                 "krepe::replay_functor, but found ("
+              << get_tree_code_name(TREE_CODE(body)) << ")\n";
     abort();
   }
 
@@ -169,24 +157,11 @@ void ast_callback(void* gcc_data, void* user_data) {
     abort();
   }
 
-  tree kokkos_ns =
-      lookup_qualified_name(global_namespace, "Kokkos", LOOK_want::NAMESPACE);
-  if (!kokkos_ns) {
-    std::cerr << "ERROR: failed to find the Kokkos namespace\n";
-    abort();
-  }
-
-  tree host_space =
-      lookup_qualified_name(kokkos_ns, "HostSpace", LOOK_want::TYPE);
-  if (!host_space) {
-    std::cerr << "ERROR: failed to find the Kokkos::HostSpace\n";
-    abort();
-  }
-
   tree void_ptr_type = build_pointer_type(void_type_node);
 
-  tree_stmt_iterator it = tsi_start(if_body);
+  tree_stmt_iterator it = tsi_start(body);
 
+  bool first_it = true;
   for (auto [view_instance, data_fn, memory_space, space_name_fn] : views) {
     tree data_expr =
         build_new_method_call(view_instance, data_fn, nullptr, NULL_TREE,
@@ -197,17 +172,24 @@ void ast_callback(void* gcc_data, void* user_data) {
                               LOOKUP_NORMAL, nullptr, tf_warning_or_error);
 
     tree casted_data = build_c_cast(UNKNOWN_LOCATION, void_ptr_type, data_expr);
+
+    tree clear_arg = build_int_cst(boolean_type_node, first_it);
+
     releasing_vec args;
     vec_safe_push(args, casted_data);
     vec_safe_push(args, name_expr);
+    vec_safe_push(args, clear_arg);
     tree call_expr =
         build_new_function_call(register_view, &args, tf_warning_or_error);
 
+    // FIXME: this cleanup expr might not be needed
     tree cleanup_expr               = build_nt(CLEANUP_POINT_EXPR, call_expr);
     TREE_TYPE(cleanup_expr)         = void_type_node;
     TREE_SIDE_EFFECTS(cleanup_expr) = true;
 
     tsi_link_before(&it, cleanup_expr, TSI_SAME_STMT);
+
+    first_it = false;
   }
 
   return;

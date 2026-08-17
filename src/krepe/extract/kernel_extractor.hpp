@@ -34,7 +34,7 @@ void register_team_policy(const char* space, const char* schedule,
                           const scratch_description& thread_scratch,
                           int chunk_size);
 bool next_invocation_will_dump(const char* kernel_name);
-void register_view(void* data, const char* space);
+void register_view(void* data, const char* space, bool clear);
 
 template <std::integral IndexType>
 constexpr std::pair<std::size_t, bool> get_index_type_props() {
