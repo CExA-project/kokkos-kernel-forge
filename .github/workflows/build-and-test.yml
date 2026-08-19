@@ -34,6 +34,9 @@ jobs:
         - "5.0.0"
         - "5.1.0"
         - "5.2.0"
+        krepe_enable_plugins:
+        - ON
+        - OFF
         configuration:
         - name: gcc Release build and tests
           compiler: gcc
@@ -114,6 +117,9 @@ jobs:
           hdf5-tools \
           libhdf5-dev \
           ninja-build
+        sudo apt-get install -y --no-install-recommends \
+          gcc-$(gcc -dumpversion)-plugin-dev \
+          libgmp-dev
 
     - name: Compute Kokkos cache fingerprint
       run: |
@@ -162,6 +168,7 @@ jobs:
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DKREPE_BUILD_TESTS=ON \
           -DKREPE_ENABLE_WARNINGS=ON \
+          -DKREPE_ENABLE_COMPILER_PLUGINS="${{ matrix.krepe_enable_plugins }}" \
           -DKREPE_ENABLE_ASAN="${{ matrix.configuration.krepe_enable_asan }}" \
           -DKREPE_ENABLE_UBSAN="${{ matrix.configuration.krepe_enable_ubsan }}"
 
