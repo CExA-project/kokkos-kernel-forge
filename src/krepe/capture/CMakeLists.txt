@@ -24,7 +24,7 @@ endif()
 target_include_directories(krepe_kokkos_hooks PRIVATE ${KOKKOS_INCLUDE_DIRS})
 target_link_libraries(krepe_kokkos_hooks PRIVATE hdf5::hdf5 hdf5::hdf5_hl)
 
-if(KREPE_ENABLE_COMPILER_PLUGINS)
+if(KREPE_HAS_COMPILER_PLUGINS)
   target_compile_definitions(krepe_kokkos_hooks PRIVATE KREPE_HAS_COMPILER_PLUGINS)
 endif()
 

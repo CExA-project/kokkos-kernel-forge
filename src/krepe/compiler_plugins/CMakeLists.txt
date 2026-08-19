@@ -1,5 +1,6 @@
 add_library(krepe_plugin_dep INTERFACE)
 install(TARGETS krepe_plugin_dep EXPORT krepeTargets)
+set(KREPE_HAS_COMPILER_PLUGINS FALSE PARENT_SCOPE)
 
 if(NOT KREPE_ENABLE_COMPILER_PLUGINS)
   return()
@@ -51,6 +52,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
     endif()
     return()
   endif()
+
+  set(KREPE_HAS_COMPILER_PLUGINS TRUE PARENT_SCOPE)
 
   find_package(GMP REQUIRED)
 
