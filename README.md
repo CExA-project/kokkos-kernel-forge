@@ -117,6 +117,13 @@ to only export allocations which correspond to one of the functor's views.
 
 If needed, compiler plugins can be disabled with `-DKREPE_ENABLE_COMPILER_PLUGINS=OFF`.
 
+If you are using GCC and your GCC installation supports plugins but does not
+provide the necessary headers to build them, using the
+[install_gcc_plugin_headers.sh](./scripts/install_gcc_plugin_headers.sh) script
+will generate and install these headers. You can then configure with
+`-DKREPE_GCC_PLUGIN_HEADERS_DIR=<path/to/headers/installation>` in order to use
+the generated headers.
+
 ## Replay
 
 Once the program dump has been generated, the kernel can be replayed in a

@@ -16,14 +16,47 @@ if(Kokkos_ENABLE_CUDA)
 endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-  include("${PROJECT_SOURCE_DIR}/cmake/gcc_plugin_headers.cmake")
+  if(KREPE_CXX_COMPILER_IS_NVCC)
+    # NOTE: This should be modified if we ever need to call the host gcc with multiple flags
+    set(GCC_EXE "${CMAKE_CXX_COMPILER};-c;-x;c++;/dev/null;-Xcompiler")
+  else()
+    set(GCC_EXE "${CMAKE_CXX_COMPILER}")
+  endif()
 
-  if(NOT TARGET gcc-plugin-headers)
+  execute_process(
+    COMMAND ${GCC_EXE} -print-file-name=plugin OUTPUT_VARIABLE GCC_PLUGIN_DIR OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if("${GCC_PLUGIN_DIR}" STREQUAL plugin OR NOT EXISTS "${GCC_PLUGIN_DIR}")
+    message(WARNING "Your GCC installation does not support plugins\nDisabling plugin support")
     return()
   endif()
 
+  if(EXISTS "${GCC_PLUGIN_DIR}/include/gcc-plugin.h")
+    set(GCC_PLUGIN_HEADERS_DIR "${GCC_PLUGIN_DIR}/include/")
+  elseif(EXISTS "${KREPE_GCC_PLUGIN_HEADERS_DIR}/gcc-plugin.h")
+    set(GCC_PLUGIN_HEADERS_DIR "${KREPE_GCC_PLUGIN_HEADERS_DIR}")
+  endif()
+
+  if(NOT GCC_PLUGIN_HEADERS_DIR)
+    if(NOT KREPE_GCC_PLUGIN_HEADERS_DIR)
+      message(
+        WARNING
+          "Your GCC installation supports plugins, but the plugin headers cannot be found. You can try installing the necessary package or building the headers using the script in scripts/install_gcc_plugin_headers.sh and providing the path to the headers using -DKREPE_GCC_PLUGIN_HEADERS_DIR=<path/to/the/headers>.\nDisabling plugin support"
+      )
+    else()
+      message(
+        WARNING
+          "The directory provided with -DKREPE_GCC_PLUGIN_HEADERS_DIR (${KREPE_GCC_PLUGIN_HEADERS_DIR}) does not contain gcc-plugin.h.\nDisabling plugin support"
+      )
+    endif()
+    return()
+  endif()
+
+  find_package(GMP REQUIRED)
+
   add_library(krepe_gcc_plugin SHARED gcc.cpp)
-  target_link_libraries(krepe_gcc_plugin PRIVATE gcc-plugin-headers)
+  target_include_directories(krepe_gcc_plugin PRIVATE "${GCC_PLUGIN_HEADERS_DIR}")
+  target_link_libraries(krepe_gcc_plugin PRIVATE GMP::GMP)
   target_compile_options(krepe_gcc_plugin PRIVATE "-fno-rtti")
   set_target_properties(krepe_gcc_plugin PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 

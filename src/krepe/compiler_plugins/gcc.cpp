@@ -7,6 +7,7 @@
 #include <cp/cp-tree.h>
 #include <stringpool.h>
 #include <iostream>
+#include <string_view>
 #include <vector>
 // clang-format on
 
@@ -195,6 +196,18 @@ void ast_callback(void* gcc_data, void* user_data) {
   return;
 }
 
+std::string_view get_configuration_target(std::string_view configuration_args) {
+  std::string_view target_flag = "--target=";
+  auto flag_start              = configuration_args.find(target_flag);
+  auto arg_start               = flag_start + target_flag.size();
+  auto arg_end                 = configuration_args.find(' ', arg_start);
+  return configuration_args.substr(arg_start, arg_end - arg_start);
+}
+
+std::string_view get_version_without_patch(std::string_view version_string) {
+  return version_string.substr(0, version_string.find_last_of('.'));
+}
+
 int plugin_init(plugin_name_args* plugin_info, plugin_gcc_version* version) {
   if (errorcount || sorrycount) {
     // A compile failure already happened earlier
@@ -203,10 +216,15 @@ int plugin_init(plugin_name_args* plugin_info, plugin_gcc_version* version) {
 
   // FIXME: Use a version variable from CMake or something else
   plugin_info->version = "0.0.1";
-  // FIXME: Add an help string
-  plugin_info->help = "Some useful help message...";
+  plugin_info->help    = "";
 
-  if (!plugin_default_version_check(version, &gcc_version)) {
+  // NOTE: we don't use plugin_default_version_check as the plugin header
+  // installation script will not necessarily use the exact same gcc version.
+  // It will use the same major and minor version, as well as the same target.
+  if (get_version_without_patch(version->basever) !=
+          get_version_without_patch(gcc_version.basever) ||
+      get_configuration_target(version->configuration_arguments) !=
+          get_configuration_target(gcc_version.configuration_arguments)) {
     return 1;
   }
 
