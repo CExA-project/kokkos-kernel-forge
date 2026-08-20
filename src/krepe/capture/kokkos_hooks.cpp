@@ -339,9 +339,9 @@ void end_kernel(const std::uint64_t kernel_id) {
     fence   = tool_fence;
     auto it = kernel_states.find(kernel_id);
     if (it != kernel_states.end()) {
-      device_id        = it->second.device_id;
-      invocation       = it->second.invocation;
-      dump_path        = it->second.dump_path;
+      device_id  = it->second.device_id;
+      invocation = it->second.invocation;
+      dump_path  = it->second.dump_path;
       kernel_states.erase(it);
     }
   }
