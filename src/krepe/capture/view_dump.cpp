@@ -6,9 +6,11 @@
 #include <cctype>
 #include <cstddef>
 #include <exception>
+#include <filesystem>
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <system_error>
 #include <variant>
 #include <vector>
 
@@ -45,10 +47,9 @@ std::string sanitize_name(std::string_view value) {
   return result;
 }
 
-std::string dump_filename(std::string_view label, std::uint64_t kernel_id,
-                          std::string_view phase) {
+std::string dump_filename(std::string_view label, std::uint64_t kernel_id) {
   return "krepe_" + sanitize_name(label) + "_" + std::to_string(kernel_id) +
-         "_" + std::string(phase) + ".h5";
+         ".h5";
 }
 
 void write_string_attribute(hid_t object, const char* name,
@@ -221,44 +222,62 @@ void write_allocation_group(hid_t views_group,
   group.close_checked();
 }
 
+void write_snapshot(hid_t file, const char* name,
+                    const AllocationSnapshot& snapshot) {
+  Hdf5Handle snapshot_group(CHECK_HDF5_ID(H5Gcreate2(file, name, H5P_DEFAULT,
+                                                     H5P_DEFAULT, H5P_DEFAULT)),
+                            H5Gclose);
+  write_uint64_attribute(snapshot_group.get(), "active_allocations",
+                         snapshot.allocations.size());
+  write_uint64_attribute(snapshot_group.get(), "active_bytes",
+                         snapshot.active_bytes);
+
+  Hdf5Handle views_group(
+      CHECK_HDF5_ID(H5Gcreate2(snapshot_group.get(), "views", H5P_DEFAULT,
+                               H5P_DEFAULT, H5P_DEFAULT)),
+      H5Gclose);
+  for (std::size_t i = 0; i < snapshot.allocations.size(); ++i) {
+    write_allocation_group(views_group.get(), snapshot.allocations[i], i);
+  }
+  views_group.close_checked();
+  snapshot_group.close_checked();
+}
+
 }  // namespace
 
-ViewDumpResult dump_view_snapshot(
-    const AllocationSnapshot& snapshot,
+ViewDumpResult create_kernel_dump(
+    const AllocationSnapshot& input_snapshot,
     const std::vector<unsigned char>& functor_data,
     const std::vector<unsigned char>& nvcc_inner_lambda_data,
     const std::unordered_map<std::string, std::string>& metadata,
     const std::variant<krepe::NoPolicyDesc, krepe::ScalarPolicyDesc,
                        krepe::RangePolicyDesc, krepe::MDRangePolicyDesc,
                        krepe::TeamPolicyDesc>& policy,
-    std::string_view phase, std::string_view label, std::uint64_t kernel_id,
+    std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation) {
   ViewDumpResult result;
-  result.filename = dump_filename(label, kernel_id, phase);
+  result.filename = dump_filename(label, kernel_id);
 
   std::lock_guard<std::mutex> lock(dump_mutex);
   try {
+    std::error_code path_error;
+    const std::filesystem::path dump_path =
+        std::filesystem::absolute(result.filename, path_error);
+    if (path_error) {
+      throw std::runtime_error("failed to resolve dump path: " +
+                               path_error.message());
+    }
+    result.filename = dump_path.string();
+
     Hdf5Handle file(
         CHECK_HDF5_ID(H5Fcreate(result.filename.c_str(), H5F_ACC_TRUNC,
                                 H5P_DEFAULT, H5P_DEFAULT)),
         H5Fclose);
 
-    write_string_attribute(file.get(), "phase", phase);
     write_string_attribute(file.get(), "kernel_label", label);
     write_uint64_attribute(file.get(), "kernel_id", kernel_id);
     write_uint64_attribute(file.get(), "kernel_invocation", kernel_invocation);
-    write_uint64_attribute(file.get(), "active_allocations",
-                           snapshot.allocations.size());
-    write_uint64_attribute(file.get(), "active_bytes", snapshot.active_bytes);
-
-    Hdf5Handle views_group(
-        CHECK_HDF5_ID(H5Gcreate2(file.get(), "views", H5P_DEFAULT, H5P_DEFAULT,
-                                 H5P_DEFAULT)),
-        H5Gclose);
-    for (std::size_t i = 0; i < snapshot.allocations.size(); ++i) {
-      write_allocation_group(views_group.get(), snapshot.allocations[i], i);
-    }
-    views_group.close_checked();
+    write_snapshot(file.get(), "in", input_snapshot);
 
     Hdf5Handle metadata_group(
         CHECK_HDF5_ID(H5Gcreate2(file.get(), "metadata", H5P_DEFAULT,
@@ -285,6 +304,31 @@ ViewDumpResult dump_view_snapshot(
     write_dataset(functor_group.get(), "nvcc_inner_lambda",
                   nvcc_inner_lambda_data);
     functor_group.close_checked();
+
+    file.close_checked();
+    result.ok = true;
+  } catch (const std::exception& error) {
+    result.ok    = false;
+    result.error = error.what();
+  } catch (...) {
+    result.ok    = false;
+    result.error = "unknown non-standard exception";
+  }
+  return result;
+}
+
+ViewDumpResult append_kernel_output(const AllocationSnapshot& output_snapshot,
+                                    std::string_view filename) {
+  ViewDumpResult result;
+  result.filename = filename;
+
+  std::lock_guard<std::mutex> lock(dump_mutex);
+  try {
+    Hdf5Handle file(CHECK_HDF5_ID(H5Fopen(result.filename.c_str(), H5F_ACC_RDWR,
+                                          H5P_DEFAULT)),
+                    H5Fclose);
+
+    write_snapshot(file.get(), "out", output_snapshot);
 
     file.close_checked();
     result.ok = true;

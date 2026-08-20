@@ -645,7 +645,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   hsize_t idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      file.get(), "in/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
       impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::HOST>,
       &host_allocation_locs, H5P_DEFAULT));
 
@@ -661,7 +661,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      file.get(), "in/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
       impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::DEVICE>,
       &device_allocation_locs, H5P_DEFAULT));
 
@@ -698,7 +698,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      file.get(), "in/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
       impl::allocate_hdf5_dataset, &copy_data_wrapper, H5P_DEFAULT));
 
   idx = 0;
@@ -710,29 +710,18 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   impl::read_policy_from_hdf5(file.get());
 
+  impl::hdf5_iterate_fun_t allocate_wrapper =
+      [this](std::string label, std::string_view memory_space, char*,
+             char* data, std::size_t size) {
+        allocate_output(label, memory_space, data, size);
+      };
+
+  idx = 0;
+  CHECK_HDF5_CALL(H5Literate_by_name(
+      file.get(), "out/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
+
   file.close_checked();
-
-  std::string_view hdf5_output_filename =
-      find_flag_argument(argc, argv, "--kernel-replayer-out-dump");
-  if (hdf5_output_filename.data() != nullptr) {
-    krepe::hdf5::ScopedHandle output_file(
-        CHECK_HDF5_ID(
-            H5Fopen(hdf5_output_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
-        H5Fclose);
-
-    impl::hdf5_iterate_fun_t allocate_wrapper =
-        [this](std::string label, std::string_view memory_space, char*,
-               char* data, std::size_t size) {
-          allocate_output(label, memory_space, data, size);
-        };
-
-    hsize_t idx = 0;
-    CHECK_HDF5_CALL(H5Literate_by_name(
-        output_file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-        impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
-
-    output_file.close_checked();
-  }
 
   impl::host_allocations        = &host_allocations;
   impl::host_output_allocations = &host_output_allocations;

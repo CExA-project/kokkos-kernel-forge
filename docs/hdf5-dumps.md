@@ -4,30 +4,33 @@ The `--krepe-dump-kernel-label=<label>` argument selects one Kokkos kernel label
 to dump. For example, `--krepe-dump-kernel-label=sum_values` matches a kernel
 launched with the label `"sum_values"`.
 
-For each matching kernel invocation, the tool writes two HDF5 files:
+For each matching kernel invocation, the tool writes one HDF5 file:
 
 ```text
-krepe_<kernel-label>_<kernel-id>_in.h5
-krepe_<kernel-label>_<kernel-id>_out.h5
+krepe_<kernel-label>_<kernel-id>.h5
 ```
 
-The `in` file is written before the kernel runs, and the `out` file is written
-after it completes. Each file contains one snapshot of all active user-visible
-Kokkos allocations.
+The `/in` group is written before the kernel runs, and the `/out` group is
+appended after it completes. Each group contains one snapshot of all active
+user-visible Kokkos allocations.
 
-The dump stores:
+The root stores these attributes:
 
 ```text
-phase              # "in" before the kernel runs, "out" after it completes
 kernel_label       # Kokkos label of the matched kernel
 kernel_id          # tool-local id assigned to this kernel invocation
 kernel_invocation  # allow dumping a specific kernel invocation
+```
+
+The `/in` and `/out` groups each store these snapshot specific attributes:
+
+```text
 active_allocations # tracked user allocations alive at dump time
 active_bytes       # total bounded user-data bytes for those active allocations
 ```
 
-The `/views` group contains one subgroup per active allocation. Each allocation
-group stores:
+The `/in/views` and `/out/views` groups contain one subgroup per active
+allocation. Each allocation group stores:
 
 ```text
 label         # Kokkos allocation label
@@ -44,7 +47,8 @@ bytes         # byte dataset, present when bytes_dumped is 1
 The `/metadata` group contains user specified metadata
 
 The `/policy` group contains the type of policy that was saved as well as its
-compile-time and runtime attributes
+compile-time and runtime attributes:
+
 ```
 type              # the type of policy stored, or "none" if no policy was recorded
 space             # the execution space's name (for every type except scalar)

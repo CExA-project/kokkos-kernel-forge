@@ -20,7 +20,6 @@
 #include <charconv>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
 #include <optional>
 #include <iostream>
 #include <mutex>
@@ -62,10 +61,9 @@ std::mutex log_mutex;
 std::mutex state_mutex;
 
 struct KernelState {
-  std::string label;
   std::uint32_t device_id;
   std::uint64_t invocation;
-  bool dump_views;
+  std::string dump_path;
 };
 
 std::unordered_map<std::uint64_t, KernelState> kernel_states;
@@ -159,29 +157,40 @@ std::optional<std::uint64_t> parse_positive_uint64(std::string_view value) {
   return parsed;
 }
 
-std::string obtain_dump_path(const std::string& filename) {
-  std::error_code error;
-  const std::filesystem::path path = std::filesystem::absolute(filename, error);
-  return error ? filename : path.string();
-}
-
-void dump_views(const char* phase, const std::string& label,
-                const std::uint64_t kernel_id, const std::uint64_t invocation) {
-  const krepe::AllocationSnapshot snapshot = allocation_tracker.snapshot();
-  const krepe::ViewDumpResult result       = krepe::dump_view_snapshot(
-      snapshot, functor_data, nvcc_inner_lambda_data, metadata, policy, phase,
-      label, kernel_id, invocation);
-  const std::string dump_path = obtain_dump_path(result.filename);
+void log_dump_result(const char* phase, const krepe::ViewDumpResult& result,
+                     const krepe::AllocationSnapshot& snapshot,
+                     const std::uint64_t kernel_id,
+                     const std::uint64_t invocation) {
   if (result.ok) {
-    log_line("dump_written phase=", phase, " path=\"", dump_path,
+    log_line("dump_written phase=", phase, " path=\"", result.filename,
              "\" kernel_id=", kernel_id, " invocation=", invocation,
              " active_allocations=", snapshot.allocations.size(),
              " active_bytes=", snapshot.active_bytes);
   } else {
-    log_line("dump_failed phase=", phase, " path=\"", dump_path,
+    log_line("dump_failed phase=", phase, " path=\"", result.filename,
              "\" kernel_id=", kernel_id, " invocation=", invocation,
              " error=\"", result.error, "\"");
   }
+}
+
+krepe::ViewDumpResult dump_input_views(const std::string& label,
+                                       const std::uint64_t kernel_id,
+                                       const std::uint64_t invocation) {
+  const krepe::AllocationSnapshot snapshot = allocation_tracker.snapshot();
+  krepe::ViewDumpResult result =
+      krepe::create_kernel_dump(snapshot, functor_data, nvcc_inner_lambda_data,
+                                metadata, policy, label, kernel_id, invocation);
+  log_dump_result("in", result, snapshot, kernel_id, invocation);
+  return result;
+}
+
+void dump_output_views(const std::string& dump_path,
+                       const std::uint64_t kernel_id,
+                       const std::uint64_t invocation) {
+  const krepe::AllocationSnapshot snapshot = allocation_tracker.snapshot();
+  krepe::ViewDumpResult result =
+      krepe::append_kernel_output(snapshot, dump_path);
+  log_dump_result("out", result, snapshot, kernel_id, invocation);
 }
 
 bool should_track_allocation(const char* label, const void* ptr) {
@@ -296,7 +305,7 @@ void begin_kernel(const char* label, const std::uint32_t device_id,
     invocation = ++kernel_invocations[kernel_label];
     dump_this_kernel =
         should_dump_views_for_invocation(kernel_label, invocation);
-    kernel_states[id] = {kernel_label, device_id, invocation, dump_this_kernel};
+    kernel_states[id] = {device_id, invocation, {}};
   }
 
   if (dump_this_kernel) {
@@ -310,34 +319,38 @@ void begin_kernel(const char* label, const std::uint32_t device_id,
     if (fence != nullptr) {
       fence(device_id);
     }
-    dump_views("in", kernel_label, id, invocation);
+    const krepe::ViewDumpResult result =
+        dump_input_views(kernel_label, id, invocation);
+    std::lock_guard<std::mutex> lock(state_mutex);
+    auto it = kernel_states.find(id);
+    if (it != kernel_states.end() && result.ok) {
+      it->second.dump_path = result.filename;
+    }
   }
 }
 
 void end_kernel(const std::uint64_t kernel_id) {
-  std::string label                           = "<unknown>";
+  std::string dump_path;
   std::uint32_t device_id                     = 0;
   std::uint64_t invocation                    = 0;
-  bool dump_this_kernel                       = false;
   Kokkos_Tools_toolInvokedFenceFunction fence = nullptr;
   {
     std::lock_guard<std::mutex> lock(state_mutex);
     fence   = tool_fence;
     auto it = kernel_states.find(kernel_id);
     if (it != kernel_states.end()) {
-      label            = it->second.label;
       device_id        = it->second.device_id;
       invocation       = it->second.invocation;
-      dump_this_kernel = it->second.dump_views;
+      dump_path        = it->second.dump_path;
       kernel_states.erase(it);
     }
   }
 
-  if (dump_this_kernel) {
+  if (!dump_path.empty()) {
     if (fence != nullptr) {
       fence(device_id);
     }
-    dump_views("out", label, kernel_id, invocation);
+    dump_output_views(dump_path, kernel_id, invocation);
   }
 }
 

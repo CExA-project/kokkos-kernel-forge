@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -o pipefail
+shopt -s nullglob
 
 if [ $# -lt 3 ]; then
   echo "The script expects at least 3 arguments"
@@ -39,7 +40,7 @@ clean_output() {
     | grep -vF -- "-----------------------------------------------------------"
 }
 
-rm -f *.h5
+rm -f -- *.h5
 
 KOKKOS_TOOLS_LIBS="$LIBKREPE_PATH" KOKKOS_TOOLS_ARGS="--krepe-dump-kernel-label=test_kernel $EXTRA_KOKKOS_TOOLS_ARGS" $EXECUTABLE | tee "$REFERENCE_OUTPUT"
 EXIT_CODE=$?
@@ -47,7 +48,13 @@ if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE
 fi
 
-$REPLAY_EXECUTABLE --kernel-replayer-dump="$(ls *_in.h5)" --kernel-replayer-out-dump="$(ls *_out.h5)" | tee "$REPLAY_OUTPUT"
+DUMP_FILES=(krepe_*.h5)
+if (( ${#DUMP_FILES[@]} != 1 )); then
+  echo "Expected exactly one HDF5 dump, found ${#DUMP_FILES[@]}"
+  clean_exit 1
+fi
+
+$REPLAY_EXECUTABLE --kernel-replayer-dump="${DUMP_FILES[0]}" | tee "$REPLAY_OUTPUT"
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
   clean_exit $EXIT_CODE

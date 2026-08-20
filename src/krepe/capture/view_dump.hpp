@@ -63,15 +63,18 @@ struct TeamPolicyDesc {
   int chunk_size;
 };
 
-ViewDumpResult dump_view_snapshot(
-    const AllocationSnapshot& snapshot,
+ViewDumpResult create_kernel_dump(
+    const AllocationSnapshot& input_snapshot,
     const std::vector<unsigned char>& functor_data,
     const std::vector<unsigned char>& nvcc_inner_lambda_data,
     const std::unordered_map<std::string, std::string>& metadata,
     const std::variant<krepe::NoPolicyDesc, krepe::ScalarPolicyDesc,
                        krepe::RangePolicyDesc, krepe::MDRangePolicyDesc,
                        krepe::TeamPolicyDesc>& policy,
-    std::string_view phase, std::string_view label, std::uint64_t kernel_id,
+    std::string_view label, std::uint64_t kernel_id,
     std::uint64_t kernel_invocation);
+
+ViewDumpResult append_kernel_output(const AllocationSnapshot& output_snapshot,
+                                    std::string_view filename);
 
 }  // namespace krepe
