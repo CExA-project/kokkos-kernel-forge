@@ -350,10 +350,10 @@ struct ParallelForVisitor {
         [&]<class IndexType, class Schedule, class ExecSpaceTag>(
             IndexType, Schedule, ExecSpaceTag) {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
-            using policy_type =
+            using policy_member_type =
                 team_policy_member_t<typename ExecSpaceTag::space, Schedule,
                                      IndexType>;
-            if constexpr (is_team_functor_v<Functor, policy_type>) {
+            if constexpr (is_team_functor_v<Functor, policy_member_type>) {
               auto p = impl::get_team_policy<typename ExecSpaceTag::space,
                                              Schedule, IndexType>(
                   policy.team_size, policy.league_size, policy.vector_length,
