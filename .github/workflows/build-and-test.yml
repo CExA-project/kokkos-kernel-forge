@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   cmake:
-    name: ${{ matrix.configuration.name }} with Kokkos ${{ matrix.kokkos_version }}
+    name: ${{ matrix.configuration.name }} with Kokkos ${{ matrix.kokkos_version }} (plugins ${{ matrix.krepe_enable_plugins }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
