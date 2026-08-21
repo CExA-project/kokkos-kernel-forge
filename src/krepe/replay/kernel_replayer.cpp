@@ -117,10 +117,12 @@ namespace impl {
 static std::unordered_map<std::string, void*>* host_allocations;
 static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
     host_output_allocations;
+static std::unordered_set<std::string>* host_output_labels;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
 static std::unordered_map<std::string, void*>* device_allocations;
 static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
     device_output_allocations;
+static std::unordered_set<std::string>* device_output_labels;
 #endif
 
 static std::unordered_map<std::string, const std::string> metadata;
@@ -163,6 +165,20 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
       return nullptr;
     }
     return it->second.get();
+#endif
+  }
+}
+
+bool has_out_allocation(impl::MemorySpaceType memory_space,
+                        const std::string& label) {
+  if (memory_space == impl::MemorySpaceType::HOST) {
+    return host_output_labels->contains(label);
+  } else {
+#if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+    throw std::runtime_error(
+        "Trying to access device allocations but no device space is enabled");
+#else
+    return device_output_labels->contains(label);
 #endif
   }
 }
@@ -716,18 +732,29 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
         allocate_output(label, memory_space, data, size);
       };
 
-  idx = 0;
-  CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "out/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-      impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
+  htri_t has_output = H5Lexists(file.get(), "out", H5P_DEFAULT);
+  CHECK_HDF5_CALL(has_output);
+  if (has_output > 0) {
+    has_output = H5Lexists(file.get(), "out/views", H5P_DEFAULT);
+    CHECK_HDF5_CALL(has_output);
+  }
+
+  if (has_output > 0) {
+    idx = 0;
+    CHECK_HDF5_CALL(H5Literate_by_name(
+        file.get(), "out/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+        impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
+  }
 
   file.close_checked();
 
   impl::host_allocations        = &host_allocations;
   impl::host_output_allocations = &host_output_allocations;
+  impl::host_output_labels      = &host_output_labels;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
   impl::device_allocations        = &device_allocations;
   impl::device_output_allocations = &device_output_allocations;
+  impl::device_output_labels      = &device_output_labels;
 #endif
 }
 
@@ -758,12 +785,12 @@ void ScopeGuard::allocate(impl::MemorySpaceType memory_space, char* address,
 void ScopeGuard::allocate_output(std::string label,
                                  std::string_view memory_space, char* data,
                                  std::size_t size) {
-  if (size == 0) {
-    return;
-  }
-
   if (impl::memory_space_type_from_string(memory_space) ==
       impl::MemorySpaceType::HOST) {
+    host_output_labels.insert(label);
+    if (size == 0) {
+      return;
+    }
     host_output_allocations.insert_or_assign(
         label, impl::regular_host_allocate(size, data));
   } else {
@@ -771,6 +798,10 @@ void ScopeGuard::allocate_output(std::string label,
     throw std::runtime_error(
         "Trying to access device allocations but no device space is enabled");
 #else
+    device_output_labels.insert(label);
+    if (size == 0) {
+      return;
+    }
     device_output_allocations.insert_or_assign(
         label, impl::regular_device_allocate(size, data));
 #endif
