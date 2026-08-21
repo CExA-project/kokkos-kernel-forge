@@ -62,6 +62,7 @@ jobs:
         # every include entry when rolling the matrix forward.
         include:
         - kokkos_version: "5.2.0"
+          krepe_enable_plugins: ON
           configuration:
             name: clang ASan build and tests
             compiler: clang-asan
@@ -73,6 +74,7 @@ jobs:
             krepe_enable_ubsan: OFF
             ctest_args: -L sanitizer_compatible
         - kokkos_version: "5.2.0"
+          krepe_enable_plugins: ON
           configuration:
             name: clang UBSan build and tests
             compiler: clang-ubsan
@@ -84,6 +86,7 @@ jobs:
             krepe_enable_ubsan: ON
             ctest_args: -L sanitizer_compatible
         - kokkos_version: "5.2.0"
+          krepe_enable_plugins: ON
           configuration:
             name: gcc OpenMP Release build and tests
             compiler: gcc-openmp
