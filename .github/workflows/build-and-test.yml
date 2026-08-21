@@ -120,6 +120,10 @@ jobs:
           hdf5-tools \
           libhdf5-dev \
           ninja-build
+
+    - name: Install GCC plugin system dependencies
+      if: ${{ matrix.krepe_enable_plugins == 'ON' && matrix.configuration.cxx == 'g++' }}
+      run: |
         sudo apt-get install -y --no-install-recommends \
           gcc-$(gcc -dumpversion)-plugin-dev \
           libgmp-dev
