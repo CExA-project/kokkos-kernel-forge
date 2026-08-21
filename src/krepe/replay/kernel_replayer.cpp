@@ -380,6 +380,16 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
   return 0;
 }
 
+herr_t allocate_hdf5_output_dataset(hid_t group, const char* name,
+                                    const H5L_info_t* info,
+                                    void* allocate_fun) {
+  if (get_hdf5_int_attribute(group, name, "bytes_dumped") == 0) {
+    return 0;
+  }
+
+  return allocate_hdf5_dataset(group, name, info, allocate_fun);
+}
+
 void read_functor_from_hdf5(hid_t file) {
   int rank = 0;
   CHECK_HDF5_CALL(H5LTget_dataset_ndims(file, "functor/functor", &rank));
@@ -743,7 +753,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
     idx = 0;
     CHECK_HDF5_CALL(H5Literate_by_name(
         file.get(), "out/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-        impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
+        impl::allocate_hdf5_output_dataset, &allocate_wrapper, H5P_DEFAULT));
   }
 
   file.close_checked();
