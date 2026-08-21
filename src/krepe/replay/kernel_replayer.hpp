@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cassert>
-#include <concepts>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
@@ -170,7 +169,6 @@ auto get_mdrange_policy(const std::vector<std::int64_t>& start,
     end_arr[i]   = end[i];
     tile_arr[i]  = tile[i];
   }
-  // TODO: handle iteration patterns
   return Kokkos::MDRangePolicy<ExecSpace, Kokkos::Schedule<Schedule>,
                                Kokkos::IndexType<IndexType>,
                                Kokkos::Rank<rank, outer_dir, inner_dir>>(
@@ -210,97 +208,56 @@ auto get_team_policy(int team_size, int league_size, int vector_length,
   return policy;
 }
 
-// NOTE: Since we resolve the rank using a variant, when calling visit, the
-// compiler will instantiate the parallel_for call with every possible rank,
-// which is why we wrap the functor with a functor able to take 1 to 6
-// arguments.
+template <class Functor, std::size_t N>
+struct functor_supports_n_args;
+
 template <class Functor>
-struct MDFunctorWrapper {
-  Functor f;
-
-  MDFunctorWrapper(Functor f) : f(f) {}
-
-  template <std::integral IndexType>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0) const {
-    if constexpr (requires(Functor f) { f(0); }) {
-      f(i0);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
-
-  template <std::integral IndexType>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0,
-                                              IndexType i1) const {
-    if constexpr (requires(Functor f) { f(0, 0); }) {
-      f(i0, i1);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
-
-  template <std::integral IndexType>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
-                                              IndexType i2) const {
-    if constexpr (requires(Functor f) { f(0, 0, 0); }) {
-      f(i0, i1, i2);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
-
-  template <std::integral IndexType>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
-                                              IndexType i2,
-                                              IndexType i3) const {
-    if constexpr (requires(Functor f) { f(0, 0, 0, 0); }) {
-      f(i0, i1, i2, i3);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
-
-  template <std::integral IndexType>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
-                                              IndexType i2, IndexType i3,
-                                              IndexType i4) const {
-    if constexpr (requires(Functor f) { f(0, 0, 0, 0, 0); }) {
-      f(i0, i1, i2, i3, i4);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
-
-  template <std::integral IndexType>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(IndexType i0, IndexType i1,
-                                              IndexType i2, IndexType i3,
-                                              IndexType i4,
-                                              IndexType i5) const {
-    if constexpr (requires(Functor f) { f(0, 0, 0, 0, 0, 0); }) {
-      f(i0, i1, i2, i3, i4, i5);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
-
-  template <class TeamMember>
-    requires Kokkos::is_team_handle_v<TeamMember>
-  KOKKOS_FORCEINLINE_FUNCTION void operator()(const TeamMember& team) const {
-    if constexpr (requires(Functor f, TeamMember t) { f(t); }) {
-      f(team);
-      return;
-    }
-    KOKKOS_ASSERT(false);
-  }
+struct functor_supports_n_args<Functor, 1> {
+  static constexpr bool value = requires(Functor f) { f(0); };
 };
+
+template <class Functor>
+struct functor_supports_n_args<Functor, 2> {
+  static constexpr bool value = requires(Functor f) { f(0, 0); };
+};
+
+template <class Functor>
+struct functor_supports_n_args<Functor, 3> {
+  static constexpr bool value = requires(Functor f) { f(0, 0, 0); };
+};
+
+template <class Functor>
+struct functor_supports_n_args<Functor, 4> {
+  static constexpr bool value = requires(Functor f) { f(0, 0, 0, 0); };
+};
+
+template <class Functor>
+struct functor_supports_n_args<Functor, 5> {
+  static constexpr bool value = requires(Functor f) { f(0, 0, 0, 0, 0); };
+};
+
+template <class Functor>
+struct functor_supports_n_args<Functor, 6> {
+  static constexpr bool value = requires(Functor f) { f(0, 0, 0, 0, 0, 0); };
+};
+
+template <class Functor, std::size_t N>
+constexpr bool functor_supports_n_args_v =
+    functor_supports_n_args<Functor, N>::value;
+
+template <class ExecSpace, class Schedule, class IndexType>
+using team_policy_member_t =
+    Kokkos::TeamPolicy<ExecSpace, Kokkos::Schedule<Schedule>,
+                       Kokkos::IndexType<IndexType>>::member_type;
+
+template <class Functor, class TeamMember>
+constexpr bool is_team_functor_v =
+    requires(Functor f, TeamMember team) { f(team); };
 
 template <class Functor>
 struct ParallelForVisitor {
   const std::string& label;
-  // We need to use the wrapper even with RangePolicy, as when replaying
-  // an MDRangePolicy the compiler will try to compile the scalar and
-  // RangePolicy overloads with a functor taking multiple arguments
-  MDFunctorWrapper<Functor> functor;
+  Functor functor;
 
   ParallelForVisitor(const std::string& label, const Functor& functor)
       : label(label), functor(functor) {}
@@ -312,31 +269,35 @@ struct ParallelForVisitor {
   }
 
   void operator()(const ScalarPolicyDesc& policy) const {
-    Kokkos::parallel_for(label, policy.N, functor);
+    if constexpr (functor_supports_n_args_v<Functor, 1>) {
+      Kokkos::parallel_for(label, policy.N, functor);
+    }
   }
 
   void operator()(const RangePolicyDesc& policy) const {
-    std::visit(
-        [&]<class IndexType, class Schedule, class ExecSpaceTag>(
-            IndexType, Schedule, ExecSpaceTag) {
-          if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
-            IndexType begin, end;
-            if constexpr (std::is_signed_v<IndexType>) {
-              begin = Kokkos::bit_cast<std::int64_t>(policy.begin);
-              end   = Kokkos::bit_cast<std::int64_t>(policy.end);
-            } else {
-              begin = policy.begin;
-              end   = policy.end;
+    if constexpr (functor_supports_n_args_v<Functor, 1>) {
+      std::visit(
+          [&]<class IndexType, class Schedule, class ExecSpaceTag>(
+              IndexType, Schedule, ExecSpaceTag) {
+            if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+              IndexType begin, end;
+              if constexpr (std::is_signed_v<IndexType>) {
+                begin = Kokkos::bit_cast<std::int64_t>(policy.begin);
+                end   = Kokkos::bit_cast<std::int64_t>(policy.end);
+              } else {
+                begin = policy.begin;
+                end   = policy.end;
+              }
+              Kokkos::parallel_for(
+                  label,
+                  impl::get_range_policy<typename ExecSpaceTag::space, Schedule,
+                                         IndexType>(begin, end,
+                                                    policy.chunk_size),
+                  functor);
             }
-            Kokkos::parallel_for(
-                label,
-                impl::get_range_policy<typename ExecSpaceTag::space, Schedule,
-                                       IndexType>(begin, end,
-                                                  policy.chunk_size),
-                functor);
-          }
-        },
-        policy.index_type, policy.schedule, policy.exec_space);
+          },
+          policy.index_type, policy.schedule, policy.exec_space);
+    }
   }
 
   void operator()(const MDRangePolicyDesc& policy) const {
@@ -344,7 +305,8 @@ struct ParallelForVisitor {
         [&]<int rank, class IndexType, class Schedule, class ExecSpaceTag>(
             std::integral_constant<int, rank>, IndexType, Schedule,
             ExecSpaceTag) {
-          if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
+          if constexpr (functor_supports_n_args_v<Functor, rank> &&
+                        !std::is_same_v<ExecSpaceTag, std::monostate>) {
             using enum Kokkos::Iterate;
             // We don't use a variant for the iteration pattern as adding
             // variants to the visit call has a noticeable impact on compile
@@ -388,13 +350,18 @@ struct ParallelForVisitor {
         [&]<class IndexType, class Schedule, class ExecSpaceTag>(
             IndexType, Schedule, ExecSpaceTag) {
           if constexpr (!std::is_same_v<ExecSpaceTag, std::monostate>) {
-            auto p = impl::get_team_policy<typename ExecSpaceTag::space,
-                                           Schedule, IndexType>(
-                policy.team_size, policy.league_size, policy.vector_length,
-                policy.team_scratch_0, policy.team_scratch_1,
-                policy.thread_scratch_0, policy.thread_scratch_1,
-                policy.chunk_size);
-            Kokkos::parallel_for(label, p, functor);
+            using policy_member_type =
+                team_policy_member_t<typename ExecSpaceTag::space, Schedule,
+                                     IndexType>;
+            if constexpr (is_team_functor_v<Functor, policy_member_type>) {
+              auto p = impl::get_team_policy<typename ExecSpaceTag::space,
+                                             Schedule, IndexType>(
+                  policy.team_size, policy.league_size, policy.vector_length,
+                  policy.team_scratch_0, policy.team_scratch_1,
+                  policy.thread_scratch_0, policy.thread_scratch_1,
+                  policy.chunk_size);
+              Kokkos::parallel_for(label, p, functor);
+            }
           }
         },
         policy.index_type, policy.schedule, policy.exec_space);
