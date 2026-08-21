@@ -114,8 +114,12 @@ us to have fine-grained control over which allocations are dumped (instead of
 dumping every allocation up to the current kernel launch). They work by
 introspecting the functor to search for Views contained inside of it, allowing
 to only export allocations which correspond to one of the functor's views.
+Plugins are currently supported for GCC, NVCC using GCC as host compiler, Clang
+and Clang-based compilers (e.g. hipcc).
 
 If needed, compiler plugins can be disabled with `-DKREPE_ENABLE_COMPILER_PLUGINS=OFF`.
+
+#### GCC
 
 If you are using GCC and your GCC installation supports plugins but does not
 provide the necessary headers to build them, using the
@@ -123,6 +127,12 @@ provide the necessary headers to build them, using the
 will generate and install these headers. You can then configure with
 `-DKREPE_GCC_PLUGIN_HEADERS_DIR=<path/to/headers/installation>` in order to use
 the generated headers.
+
+#### Clang-based compilers
+
+If you are using Clang or a Clang-based compiler, you might need to specify the
+path to your llvm installation when configuring using
+`-DLLVM_ROOT=<path/to/llvm>`
 
 ## Replay
 
