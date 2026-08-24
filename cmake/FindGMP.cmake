@@ -20,7 +20,7 @@
 find_package(PkgConfig QUIET)
 pkg_check_modules(PC_GMP QUIET gmp)
 
-set(GMP_VERSION ${PC_GMP_gmp_VERSION})
+set(GMP_VERSION ${PC_GMP_VERSION})
 
 find_library(GMP_LIBRARY NAMES gmp libgmp HINTS ENV GMP_ROOT ${GMP_ROOT} ${PC_GMP_LIBDIR} ${PC_GMP_LIBRARY_DIRS})
 
