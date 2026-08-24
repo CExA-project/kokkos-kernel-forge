@@ -76,6 +76,7 @@ do
     ;;
   *)
     echo "unknown flag '$1'"
+    exit 1
     ;;
   esac
 done
