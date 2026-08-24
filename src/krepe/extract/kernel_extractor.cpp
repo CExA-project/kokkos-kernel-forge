@@ -26,7 +26,8 @@ void (*register_team_policy_function)(const char* space, const char*,
                                       std::size_t, bool, int, int, int, int,
                                       int, int, int, int)            = nullptr;
 bool (*next_invocation_will_dump_function)(const char*)              = nullptr;
-void (*register_view_function)(void* data, const char*, bool)        = nullptr;
+void (*clear_registered_views_function)()                            = nullptr;
+void (*register_view_function)(void* data, const char*)              = nullptr;
 std::optional<bool> has_kernel_dump_tool = std::nullopt;
 
 #if defined(KOKKOS_ENABLE_LIBDL)
@@ -62,6 +63,8 @@ bool init_internal_functions_from_tool() {
                                  register_team_policy_function) &&
          load_function_from_tool("krepe_kernel_dump_next_invocation_will_dump",
                                  next_invocation_will_dump_function) &&
+         load_function_from_tool("krepe_kernel_dump_clear_registered_views",
+                                 clear_registered_views_function) &&
          load_function_from_tool("krepe_kernel_dump_register_view",
                                  register_view_function);
 }
@@ -90,7 +93,8 @@ void init_internal_functions() {
                                          bool, int, int, int, int, int, int,
                                          int, int) {};
       next_invocation_will_dump_function = [](const char*) { return false; };
-      register_view_function             = [](void*, const char*, bool) {};
+      clear_registered_views_function    = []() {};
+      register_view_function             = [](void*, const char*) {};
       has_kernel_dump_tool               = false;
     }
   }
@@ -153,9 +157,14 @@ bool next_invocation_will_dump(const char* kernel_name) {
   return next_invocation_will_dump_function(kernel_name);
 }
 
-void register_view(void* data, const char* space, bool clear) {
+void clear_registered_views() {
   init_internal_functions();
-  register_view_function(data, space, clear);
+  clear_registered_views_function();
+}
+
+void register_view(void* data, const char* space) {
+  init_internal_functions();
+  register_view_function(data, space);
 }
 
 }  // namespace impl

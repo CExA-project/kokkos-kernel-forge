@@ -424,12 +424,12 @@ KOKKOS_HOOKS_EXPORT bool krepe_kernel_dump_next_invocation_will_dump(
                                           kernel_invocations[kernel_name] + 1);
 }
 
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_clear_registered_views() {
+  allocation_tracker.clear_used_allocations();
+}
+
 KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_view(void* data,
-                                                         const char* space,
-                                                         bool clear) {
-  if (clear) {
-    allocation_tracker.clear_used_allocations();
-  }
+                                                         const char* space) {
   allocation_tracker.record_used_allocation(space, data);
 }
 

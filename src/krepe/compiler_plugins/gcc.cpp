@@ -151,6 +151,15 @@ void ast_callback(void* gcc_data, void* user_data) {
     std::cerr << "ERROR: failed to find the krepe::impl namespace\n";
     abort();
   }
+
+  tree clear_registered_views = lookup_qualified_name(
+      impl_ns, "clear_registered_views", LOOK_want::NORMAL);
+  if (!clear_registered_views ||
+      TREE_CODE(clear_registered_views) != FUNCTION_DECL) {
+    std::cerr << "ERROR: failed to find krepe::impl::clear_registered_views\n";
+    abort();
+  }
+
   tree register_view =
       lookup_qualified_name(impl_ns, "register_view", LOOK_want::NORMAL);
   if (!register_view || TREE_CODE(register_view) != FUNCTION_DECL) {
@@ -162,7 +171,16 @@ void ast_callback(void* gcc_data, void* user_data) {
 
   tree_stmt_iterator it = tsi_start(body);
 
-  bool first_it = true;
+  releasing_vec empty_args;
+  tree clear_registered_views_call = build_new_function_call(
+      clear_registered_views, &empty_args, tf_warning_or_error);
+
+  tree clear_registered_views_cleanup_expr =
+      build_nt(CLEANUP_POINT_EXPR, clear_registered_views_call);
+  TREE_TYPE(clear_registered_views_cleanup_expr)         = void_type_node;
+  TREE_SIDE_EFFECTS(clear_registered_views_cleanup_expr) = true;
+  tsi_link_before(&it, clear_registered_views_cleanup_expr, TSI_SAME_STMT);
+
   for (auto [view_instance, data_fn, memory_space, space_name_fn] : views) {
     tree data_expr =
         build_new_method_call(view_instance, data_fn, nullptr, NULL_TREE,
@@ -174,26 +192,19 @@ void ast_callback(void* gcc_data, void* user_data) {
 
     tree casted_data = build_c_cast(UNKNOWN_LOCATION, void_ptr_type, data_expr);
 
-    tree clear_arg = build_int_cst(boolean_type_node, first_it);
-
     releasing_vec args;
     vec_safe_push(args, casted_data);
     vec_safe_push(args, name_expr);
-    vec_safe_push(args, clear_arg);
-    tree call_expr =
+    tree register_view_call =
         build_new_function_call(register_view, &args, tf_warning_or_error);
 
-    // FIXME: this cleanup expr might not be needed
-    tree cleanup_expr               = build_nt(CLEANUP_POINT_EXPR, call_expr);
-    TREE_TYPE(cleanup_expr)         = void_type_node;
-    TREE_SIDE_EFFECTS(cleanup_expr) = true;
+    tree register_view_cleanup_expr =
+        build_nt(CLEANUP_POINT_EXPR, register_view_call);
+    TREE_TYPE(register_view_cleanup_expr)         = void_type_node;
+    TREE_SIDE_EFFECTS(register_view_cleanup_expr) = true;
 
-    tsi_link_before(&it, cleanup_expr, TSI_SAME_STMT);
-
-    first_it = false;
+    tsi_link_before(&it, register_view_cleanup_expr, TSI_SAME_STMT);
   }
-
-  return;
 }
 
 std::string_view get_configuration_target(std::string_view configuration_args) {
