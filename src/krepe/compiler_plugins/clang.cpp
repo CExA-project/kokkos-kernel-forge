@@ -14,14 +14,34 @@ static_assert(false,
               " vs " CLANG_VERSION_STRING ")");
 #endif
 
-#define NO_SRC_LOC \
-  SourceLocation {}
-#define NO_FP_OPTS \
-  FPOptionsOverride {}
-#define NO_NESTED_LOC \
-  NestedNameSpecifierLoc {}
-
 namespace {
+
+ImplicitCastExpr* get_function_ptr_expr(const ASTContext& ast,
+                                        FunctionDecl* function) {
+  DeclRefExpr* function_ref_expr = DeclRefExpr::Create(
+      ast, NestedNameSpecifierLoc{}, SourceLocation{}, function, false,
+      SourceLocation{}, function->getType(), VK_LValue);
+
+  return ImplicitCastExpr::Create(ast, ast.getPointerType(function->getType()),
+                                  CK_FunctionToPointerDecay, function_ref_expr,
+                                  nullptr, VK_PRValue, FPOptionsOverride{});
+}
+
+CallExpr* build_function_call(const CompilerInstance& compiler,
+                              FunctionDecl* function, ArrayRef<Expr*> args,
+                              ImplicitCastExpr* function_ptr = nullptr) {
+  auto& ast  = compiler.getASTContext();
+  auto& sema = compiler.getSema();
+
+  if (!function_ptr) {
+    function_ptr = get_function_ptr_expr(ast, function);
+  }
+
+  sema.MarkFunctionReferenced(SourceLocation{}, function);
+
+  return CallExpr::Create(ast, function_ptr, args, function->getReturnType(),
+                          VK_PRValue, SourceLocation{}, FPOptionsOverride{});
+}
 
 QualType get_canonical_type(const QualType& type) {
   return type.getNonReferenceType().getUnqualifiedType().getCanonicalType();
@@ -171,13 +191,15 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
 
     ASTContext& ast   = compiler.getASTContext();
     DeclRefExpr* root = DeclRefExpr::Create(
-        ast, NO_NESTED_LOC, NO_SRC_LOC, dyn_cast<VarDecl>(functor), false,
-        functor->getLocation(), functor->getType(), VK_LValue);
+        ast, NestedNameSpecifierLoc{}, SourceLocation{},
+        dyn_cast<VarDecl>(functor), false, functor->getLocation(),
+        functor->getType(), VK_LValue);
     if (!root) {
       llvm::errs() << "Failed to create root RefExpr\n";
       abort();
     }
-    FunctorVisitor functor_visitor(compiler.getASTContext());
+
+    FunctorVisitor functor_visitor(ast);
     functor_visitor.visit(functor_struct, root);
     const std::vector<ViewInfo>& views = functor_visitor.get_views();
 
@@ -220,69 +242,38 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
       abort();
     }
 
-    auto register_view_expr = DeclRefExpr::Create(
-        ast, NO_NESTED_LOC, NO_SRC_LOC, register_view_function, false,
-        NO_SRC_LOC, register_view_function->getType(), VK_LValue);
-    auto casted_register_view_ptr = ImplicitCastExpr::Create(
-        ast, ast.getPointerType(register_view_function->getType()),
-        CK_FunctionToPointerDecay, register_view_expr, nullptr, VK_PRValue,
-        NO_FP_OPTS);
+    auto register_view_ptr = get_function_ptr_expr(ast, register_view_function);
 
     std::vector<Stmt*> new_body_stmts;
     new_body_stmts.reserve(views.size() + 2);
 
-    auto clear_registered_views_expr = DeclRefExpr::Create(
-        ast, NO_NESTED_LOC, NO_SRC_LOC, clear_registered_views_function, false,
-        NO_SRC_LOC, clear_registered_views_function->getType(), VK_LValue);
-    auto casted_clear_registered_views_ptr = ImplicitCastExpr::Create(
-        ast, ast.getPointerType(clear_registered_views_function->getType()),
-        CK_FunctionToPointerDecay, clear_registered_views_expr, nullptr,
-        VK_PRValue, NO_FP_OPTS);
-
     auto clear_registered_views_call =
-        CallExpr::Create(ast, casted_clear_registered_views_ptr, {},
-                         clear_registered_views_function->getReturnType(),
-                         VK_PRValue, NO_SRC_LOC, NO_FP_OPTS);
+        build_function_call(compiler, clear_registered_views_function, {});
     new_body_stmts.push_back(clear_registered_views_call);
 
     Sema& sema = compiler.getSema();
-    sema.MarkFunctionReferenced(NO_SRC_LOC, register_view_function);
-    sema.MarkFunctionReferenced(NO_SRC_LOC, clear_registered_views_function);
 
     for (auto& [data_method_expr, data_method_decl, memory_space,
                 name_function_decl] : views) {
-      sema.MarkFunctionReferenced(NO_SRC_LOC, data_method_decl);
-      sema.MarkFunctionReferenced(NO_SRC_LOC, name_function_decl);
+      sema.MarkFunctionReferenced(SourceLocation{}, data_method_decl);
 
       auto data_call = CXXMemberCallExpr::Create(
           ast, data_method_expr, {}, data_method_decl->getReturnType(),
-          VK_PRValue, NO_SRC_LOC, NO_FP_OPTS);
+          VK_PRValue, SourceLocation{}, FPOptionsOverride{});
 
-      auto casted_data =
+      auto data_ptr =
           ImplicitCastExpr::Create(ast, ast.VoidPtrTy, CK_BitCast, data_call,
-                                   nullptr, VK_PRValue, FPOptionsOverride());
+                                   nullptr, VK_PRValue, FPOptionsOverride{});
 
-      auto name_expr = DeclRefExpr::Create(
-          ast, NO_NESTED_LOC, NO_SRC_LOC, name_function_decl, false, NO_SRC_LOC,
-          name_function_decl->getType(), VK_LValue);
-
-      auto casted_name_ptr = ImplicitCastExpr::Create(
-          ast, ast.getPointerType(name_function_decl->getType()),
-          CK_FunctionToPointerDecay, name_expr, nullptr, VK_PRValue,
-          NO_FP_OPTS);
-
-      auto name_call = CallExpr::Create(ast, casted_name_ptr, {},
-                                        name_function_decl->getReturnType(),
-                                        VK_PRValue, NO_SRC_LOC, NO_FP_OPTS);
+      auto name_call = build_function_call(compiler, name_function_decl, {});
 
       std::array<Expr*, 2> register_view_args = {
-          casted_data,
+          data_ptr,
           name_call,
       };
       auto register_view_call =
-          CallExpr::Create(ast, casted_register_view_ptr, register_view_args,
-                           register_view_function->getReturnType(), VK_PRValue,
-                           NO_SRC_LOC, NO_FP_OPTS);
+          build_function_call(compiler, register_view_function,
+                              register_view_args, register_view_ptr);
 
       new_body_stmts.push_back(register_view_call);
     }
@@ -291,7 +282,7 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
     new_body_stmts.push_back(body);
 
     auto new_body =
-        CompoundStmt::Create(ast, new_body_stmts, NO_FP_OPTS,
+        CompoundStmt::Create(ast, new_body_stmts, FPOptionsOverride{},
                              fun->getBeginLoc(), fun->getBodyRBrace());
 
     fun->setBody(new_body);
