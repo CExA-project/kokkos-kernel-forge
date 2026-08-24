@@ -16,6 +16,12 @@ option(KREPE_BUILD_TESTS "Build KREPE tests" OFF)
 option(KREPE_ENABLE_WARNINGS "Enable compiler warning options for KREPE targets" ON)
 option(KREPE_ENABLE_ASAN "Enable AddressSanitizer instrumentation" OFF)
 option(KREPE_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer instrumentation" OFF)
+option(KREPE_ENABLE_COMPILER_PLUGINS "Enable the use of compiler plugins if the CXX compiler supports them" ON)
+option(KREPE_GCC_PLUGIN_HEADERS_DIR
+       "Path to a directory containing the necessary headers to build a gcc plugin (gcc-plugin.h, etc)" ""
+)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 add_library(krepe_warnings INTERFACE)
 

@@ -21,5 +21,8 @@ if(Kokkos_ENABLE_LIBDL)
   target_compile_definitions(kernel_extractor PRIVATE _GNU_SOURCE)
   target_link_libraries(kernel_extractor PRIVATE ${CMAKE_DL_LIBS})
 endif()
+if(TARGET krepe_gcc_plugin)
+  target_link_libraries(kernel_extractor PUBLIC krepe_plugin_dep)
+endif()
 
 install(TARGETS kernel_extractor EXPORT krepeTargets FILE_SET extract_headers)

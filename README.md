@@ -107,6 +107,23 @@ int main() {
 
 Note that the execution policy cannot be saved in this case.
 
+### Compiler plugins
+
+By default, if the compiler supports it, we build compiler plugins which allow
+us to have fine-grained control over which allocations are dumped (instead of
+dumping every allocation up to the current kernel launch). They work by
+introspecting the functor to search for Views contained inside of it, allowing
+to only export allocations which correspond to one of the functor's views.
+
+If needed, compiler plugins can be disabled with `-DKREPE_ENABLE_COMPILER_PLUGINS=OFF`.
+
+If you are using GCC and your GCC installation supports plugins but does not
+provide the necessary headers to build them, using the
+[install_gcc_plugin_headers.sh](./scripts/install_gcc_plugin_headers.sh) script
+will generate and install these headers. You can then configure with
+`-DKREPE_GCC_PLUGIN_HEADERS_DIR=<path/to/headers/installation>` in order to use
+the generated headers.
+
 ## Replay
 
 Once the program dump has been generated, the kernel can be replayed in a
@@ -183,8 +200,8 @@ Kokkos::View<int*> result_values(result_values_ptr, 1024);
   a Kokkos team handle:
   - For `RangePolicy`: `KOKKOS_LABMDA(std::integral auto i) { ... }`
   - For `TeamPolicy`: `KOKKOS_LAMBDA(Kokkos::TeamHandle auto team) { ... }`
-  But note that generic kernels are not supported by nvcc
+  Note however that generic kernels are not supported by nvcc anyway
 - The `LaunchBounds` and `WorkTag` template arguments for execution policies
   cannot be automatically restored in the replayed program
-- Currently, the scratch memory parameters for `TeamPolicy` cannot be
-  automatically restored in the replayed program
+- Depending on your Kokkos version, the scratch memory parameters for
+  `TeamPolicy` may not be automatically restored in the replayed program

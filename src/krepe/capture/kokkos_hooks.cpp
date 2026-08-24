@@ -424,6 +424,15 @@ KOKKOS_HOOKS_EXPORT bool krepe_kernel_dump_next_invocation_will_dump(
                                           kernel_invocations[kernel_name] + 1);
 }
 
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_clear_registered_views() {
+  allocation_tracker.clear_used_allocations();
+}
+
+KOKKOS_HOOKS_EXPORT void krepe_kernel_dump_register_view(void* data,
+                                                         const char* space) {
+  allocation_tracker.record_used_allocation(space, data);
+}
+
 KOKKOS_HOOKS_EXPORT void kokkosp_begin_parallel_for(
     const char* label, const std::uint32_t device_id,
     std::uint64_t* kernel_id) {

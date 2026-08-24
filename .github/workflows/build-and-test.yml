@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   cmake:
-    name: ${{ matrix.configuration.name }} with Kokkos ${{ matrix.kokkos_version }}
+    name: ${{ matrix.configuration.name }} with Kokkos ${{ matrix.kokkos_version }} (plugins ${{ matrix.krepe_enable_plugins }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -34,6 +34,9 @@ jobs:
         - "5.0.0"
         - "5.1.0"
         - "5.2.0"
+        krepe_enable_plugins:
+        - ON
+        - OFF
         configuration:
         - name: gcc Release build and tests
           compiler: gcc
@@ -59,6 +62,7 @@ jobs:
         # every include entry when rolling the matrix forward.
         include:
         - kokkos_version: "5.2.0"
+          krepe_enable_plugins: ON
           configuration:
             name: clang ASan build and tests
             compiler: clang-asan
@@ -70,6 +74,7 @@ jobs:
             krepe_enable_ubsan: OFF
             ctest_args: -L sanitizer_compatible
         - kokkos_version: "5.2.0"
+          krepe_enable_plugins: ON
           configuration:
             name: clang UBSan build and tests
             compiler: clang-ubsan
@@ -81,6 +86,7 @@ jobs:
             krepe_enable_ubsan: ON
             ctest_args: -L sanitizer_compatible
         - kokkos_version: "5.2.0"
+          krepe_enable_plugins: ON
           configuration:
             name: gcc OpenMP Release build and tests
             compiler: gcc-openmp
@@ -114,6 +120,13 @@ jobs:
           hdf5-tools \
           libhdf5-dev \
           ninja-build
+
+    - name: Install GCC plugin system dependencies
+      if: ${{ matrix.krepe_enable_plugins == 'ON' && matrix.configuration.cxx == 'g++' }}
+      run: |
+        sudo apt-get install -y --no-install-recommends \
+          gcc-$(gcc -dumpversion)-plugin-dev \
+          libgmp-dev
 
     - name: Compute Kokkos cache fingerprint
       run: |
@@ -162,6 +175,7 @@ jobs:
           -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
           -DKREPE_BUILD_TESTS=ON \
           -DKREPE_ENABLE_WARNINGS=ON \
+          -DKREPE_ENABLE_COMPILER_PLUGINS="${{ matrix.krepe_enable_plugins }}" \
           -DKREPE_ENABLE_ASAN="${{ matrix.configuration.krepe_enable_asan }}" \
           -DKREPE_ENABLE_UBSAN="${{ matrix.configuration.krepe_enable_ubsan }}"
 
