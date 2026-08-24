@@ -194,15 +194,29 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
       abort();
     }
 
+    FunctionDecl* clear_registered_views_function =
+        dyn_cast<FunctionDecl>(get_enclosed_decl(
+            impl_namespace, "clear_registered_views", ast, [](NamedDecl* decl) {
+              FunctionDecl* func = dyn_cast<FunctionDecl>(decl);
+              return func && func->param_size() == 0;
+            }));
+
+    if (!clear_registered_views_function) {
+      llvm::errs() << "Failed to find the krepe::impl::clear_registered_views "
+                      "function\n";
+      abort();
+    }
+
     FunctionDecl* register_view_function =
         dyn_cast<FunctionDecl>(get_enclosed_decl(
             impl_namespace, "register_view", ast, [](NamedDecl* decl) {
               FunctionDecl* func = dyn_cast<FunctionDecl>(decl);
-              return func && func->param_size() == 3;
+              return func && func->param_size() == 2;
             }));
 
     if (!register_view_function) {
-      llvm::errs() << "Failed to find the krepe::register_view function\n";
+      llvm::errs()
+          << "Failed to find the krepe::impl::register_view function\n";
       abort();
     }
 
@@ -215,12 +229,25 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
         NO_FP_OPTS);
 
     std::vector<Stmt*> new_body_stmts;
-    new_body_stmts.reserve(views.size() + 1);
+    new_body_stmts.reserve(views.size() + 2);
+
+    auto clear_registered_views_expr = DeclRefExpr::Create(
+        ast, NO_NESTED_LOC, NO_SRC_LOC, clear_registered_views_function, false,
+        NO_SRC_LOC, clear_registered_views_function->getType(), VK_LValue);
+    auto casted_clear_registered_views_ptr = ImplicitCastExpr::Create(
+        ast, ast.getPointerType(clear_registered_views_function->getType()),
+        CK_FunctionToPointerDecay, clear_registered_views_expr, nullptr,
+        VK_PRValue, NO_FP_OPTS);
+
+    auto clear_registered_views_call =
+        CallExpr::Create(ast, casted_clear_registered_views_ptr, {},
+                         clear_registered_views_function->getReturnType(),
+                         VK_PRValue, NO_SRC_LOC, NO_FP_OPTS);
+    new_body_stmts.push_back(clear_registered_views_call);
 
     Sema& sema = compiler.getSema();
     sema.MarkFunctionReferenced(NO_SRC_LOC, register_view_function);
-
-    bool first_it = true;
+    sema.MarkFunctionReferenced(NO_SRC_LOC, clear_registered_views_function);
 
     for (auto& [data_method_expr, data_method_decl, memory_space,
                 name_function_decl] : views) {
@@ -248,19 +275,16 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
                                         name_function_decl->getReturnType(),
                                         VK_PRValue, NO_SRC_LOC, NO_FP_OPTS);
 
-      auto clear_expr =
-          CXXBoolLiteralExpr::Create(ast, first_it, ast.BoolTy, NO_SRC_LOC);
-
-      std::array<Expr*, 3> register_view_args = {casted_data, name_call,
-                                                 clear_expr};
+      std::array<Expr*, 2> register_view_args = {
+          casted_data,
+          name_call,
+      };
       auto register_view_call =
           CallExpr::Create(ast, casted_register_view_ptr, register_view_args,
                            register_view_function->getReturnType(), VK_PRValue,
                            NO_SRC_LOC, NO_FP_OPTS);
 
       new_body_stmts.push_back(register_view_call);
-
-      first_it = false;
     }
 
     Stmt* body = fun->getBody();
