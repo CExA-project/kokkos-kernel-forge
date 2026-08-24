@@ -59,10 +59,11 @@ AllocationSnapshot AllocationTracker::snapshot() {
     std::sort(pointers.begin(), pointers.end());
 
     for (const auto& [ptr, record] : active_allocations_[space]) {
-      auto used_ptr = std::lower_bound(pointers.begin(), pointers.end(), ptr);
+      auto used_ptr =
+          std::lower_bound(pointers.begin(), pointers.end(), record.p_data);
       if (used_ptr != pointers.end() &&
-          reinterpret_cast<std::uintptr_t>(*used_ptr) <
-              reinterpret_cast<std::uintptr_t>(ptr) + record.size) {
+          reinterpret_cast<std::uintptr_t>(*used_ptr) <=
+              reinterpret_cast<std::uintptr_t>(record.p_data) + record.size) {
         snapshot.active_bytes += record.size;
         snapshot.allocations.push_back({ptr, record});
       }
