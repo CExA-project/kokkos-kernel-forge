@@ -117,10 +117,12 @@ namespace impl {
 static std::unordered_map<std::string, void*>* host_allocations;
 static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
     host_output_allocations;
+static std::unordered_set<std::string>* host_output_labels;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
 static std::unordered_map<std::string, void*>* device_allocations;
 static std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>*
     device_output_allocations;
+static std::unordered_set<std::string>* device_output_labels;
 #endif
 
 static std::unordered_map<std::string, const std::string> metadata;
@@ -163,6 +165,20 @@ void* get_out_allocation(impl::MemorySpaceType memory_space,
       return nullptr;
     }
     return it->second.get();
+#endif
+  }
+}
+
+bool has_out_allocation(impl::MemorySpaceType memory_space,
+                        const std::string& label) {
+  if (memory_space == impl::MemorySpaceType::HOST) {
+    return host_output_labels->contains(label);
+  } else {
+#if !defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
+    throw std::runtime_error(
+        "Trying to access device allocations but no device space is enabled");
+#else
+    return device_output_labels->contains(label);
 #endif
   }
 }
@@ -362,6 +378,16 @@ herr_t allocate_hdf5_dataset(hid_t group, const char* name, const H5L_info_t*,
       label, space, address, buffer.get(), buffer_size);
 
   return 0;
+}
+
+herr_t allocate_hdf5_output_dataset(hid_t group, const char* name,
+                                    const H5L_info_t* info,
+                                    void* allocate_fun) {
+  if (get_hdf5_int_attribute(group, name, "bytes_dumped") == 0) {
+    return 0;
+  }
+
+  return allocate_hdf5_dataset(group, name, info, allocate_fun);
 }
 
 void read_functor_from_hdf5(hid_t file) {
@@ -645,7 +671,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   hsize_t idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      file.get(), "in/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
       impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::HOST>,
       &host_allocation_locs, H5P_DEFAULT));
 
@@ -661,7 +687,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      file.get(), "in/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
       impl::get_hdf5_dataset_alloc_info<impl::MemorySpaceType::DEVICE>,
       &device_allocation_locs, H5P_DEFAULT));
 
@@ -698,7 +724,7 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   idx = 0;
   CHECK_HDF5_CALL(H5Literate_by_name(
-      file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+      file.get(), "in/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
       impl::allocate_hdf5_dataset, &copy_data_wrapper, H5P_DEFAULT));
 
   idx = 0;
@@ -710,35 +736,35 @@ ScopeGuard::ScopeGuard(int& argc, char* argv[]) {
 
   impl::read_policy_from_hdf5(file.get());
 
-  file.close_checked();
+  impl::hdf5_iterate_fun_t allocate_wrapper =
+      [this](std::string label, std::string_view memory_space, char*,
+             char* data, std::size_t size) {
+        allocate_output(label, memory_space, data, size);
+      };
 
-  std::string_view hdf5_output_filename =
-      find_flag_argument(argc, argv, "--kernel-replayer-out-dump");
-  if (hdf5_output_filename.data() != nullptr) {
-    krepe::hdf5::ScopedHandle output_file(
-        CHECK_HDF5_ID(
-            H5Fopen(hdf5_output_filename.data(), H5F_ACC_RDONLY, H5P_DEFAULT)),
-        H5Fclose);
-
-    impl::hdf5_iterate_fun_t allocate_wrapper =
-        [this](std::string label, std::string_view memory_space, char*,
-               char* data, std::size_t size) {
-          allocate_output(label, memory_space, data, size);
-        };
-
-    hsize_t idx = 0;
-    CHECK_HDF5_CALL(H5Literate_by_name(
-        output_file.get(), "views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
-        impl::allocate_hdf5_dataset, &allocate_wrapper, H5P_DEFAULT));
-
-    output_file.close_checked();
+  htri_t has_output = H5Lexists(file.get(), "out", H5P_DEFAULT);
+  CHECK_HDF5_CALL(has_output);
+  if (has_output > 0) {
+    has_output = H5Lexists(file.get(), "out/views", H5P_DEFAULT);
+    CHECK_HDF5_CALL(has_output);
   }
+
+  if (has_output > 0) {
+    idx = 0;
+    CHECK_HDF5_CALL(H5Literate_by_name(
+        file.get(), "out/views", H5_INDEX_NAME, H5_ITER_NATIVE, &idx,
+        impl::allocate_hdf5_output_dataset, &allocate_wrapper, H5P_DEFAULT));
+  }
+
+  file.close_checked();
 
   impl::host_allocations        = &host_allocations;
   impl::host_output_allocations = &host_output_allocations;
+  impl::host_output_labels      = &host_output_labels;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
   impl::device_allocations        = &device_allocations;
   impl::device_output_allocations = &device_output_allocations;
+  impl::device_output_labels      = &device_output_labels;
 #endif
 }
 
@@ -769,12 +795,12 @@ void ScopeGuard::allocate(impl::MemorySpaceType memory_space, char* address,
 void ScopeGuard::allocate_output(std::string label,
                                  std::string_view memory_space, char* data,
                                  std::size_t size) {
-  if (size == 0) {
-    return;
-  }
-
   if (impl::memory_space_type_from_string(memory_space) ==
       impl::MemorySpaceType::HOST) {
+    host_output_labels.insert(label);
+    if (size == 0) {
+      return;
+    }
     host_output_allocations.insert_or_assign(
         label, impl::regular_host_allocate(size, data));
   } else {
@@ -782,6 +808,10 @@ void ScopeGuard::allocate_output(std::string label,
     throw std::runtime_error(
         "Trying to access device allocations but no device space is enabled");
 #else
+    device_output_labels.insert(label);
+    if (size == 0) {
+      return;
+    }
     device_output_allocations.insert_or_assign(
         label, impl::regular_device_allocate(size, data));
 #endif

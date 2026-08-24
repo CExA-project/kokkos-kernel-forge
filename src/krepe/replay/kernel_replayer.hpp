@@ -7,6 +7,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 #include <variant>
 #include <tuple>
 #include <Kokkos_Core.hpp>
@@ -28,6 +29,8 @@ void* get_allocation(impl::MemorySpaceType memory_space,
                      const std::string& label);
 void* get_out_allocation(impl::MemorySpaceType memory_space,
                          const std::string& label);
+bool has_out_allocation(impl::MemorySpaceType memory_space,
+                        const std::string& label);
 
 template <class T>
 struct add_unmanaged_trait;
@@ -375,11 +378,13 @@ class ScopeGuard {
   std::unordered_map<std::string, void*> host_allocations;
   std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>
       host_output_allocations;
+  std::unordered_set<std::string> host_output_labels;
 #if defined(KERNEL_REPLAYER_HAS_DEVICE_SPACE)
   std::vector<impl::Allocation> device_raw_allocations;
   std::unordered_map<std::string, void*> device_allocations;
   std::unordered_map<std::string, std::unique_ptr<void, void (*)(void*)>>
       device_output_allocations;
+  std::unordered_set<std::string> device_output_labels;
 #endif
 
   void allocate(impl::MemorySpaceType memory_space, char* address,
@@ -416,6 +421,12 @@ void compare_views(View const& view, Tuple args, Functor&& f) {
 
   value_type* data = static_cast<value_type*>(
       krepe::get_allocation<memory_space>(view.label()));
+  if (!impl::has_out_allocation(
+          impl::memory_space_type_from_string(memory_space::name()),
+          view.label())) {
+    throw std::runtime_error("Reference output for view '" + view.label() +
+                             "' is not available in the kernel dump");
+  }
   value_type* ref_data = static_cast<value_type*>(
       krepe::get_out_allocation<memory_space>(view.label()));
 
@@ -439,6 +450,11 @@ void compare_views(const std::string& label, Tuple args, Functor&& f) {
 
   value_type* data =
       static_cast<value_type*>(krepe::get_allocation<memory_space>(label));
+  if (!impl::has_out_allocation(
+          impl::memory_space_type_from_string(memory_space::name()), label)) {
+    throw std::runtime_error("Reference output for view '" + label +
+                             "' is not available in the kernel dump");
+  }
   value_type* ref_data =
       static_cast<value_type*>(krepe::get_out_allocation<memory_space>(label));
 

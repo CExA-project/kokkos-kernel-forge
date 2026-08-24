@@ -84,8 +84,9 @@ KOKKOS_TOOLS_ARGS="--krepe-dump-kernel-label=scale
 ./prog
 ```
 
-This will generate two hdf5 files named `krepe_scale_2_{in,out}.h5`, see [HDF5 dump format](docs/hdf5-dumps.md) for the file naming scheme and
-stored metadata.
+This generates one HDF5 file named `krepe_scale_2.h5`. See the
+[HDF5 dump format](docs/hdf5-dumps.md) for the file naming scheme and stored
+metadata.
 
 ### Parallel_for wrapper
 
@@ -143,9 +144,11 @@ int main(int argc, char* argv[]) {
 }
 ```
 
-The program has to be linked with `krepe::kernel_replayer`, the dumps are passed using command line flags
+The program has to be linked with `krepe::kernel_replayer`. Pass the dump using
+the `--kernel-replayer-dump` command line flag:
+
 ```sh
-./replay_prog --kernel-replayer-dump=krepe_scale_2_in.h5 --kernel-replayer-out-dump=krepe_scale_2_out.h5
+./replay_prog --kernel-replayer-dump=krepe_scale_2.h5
 ```
 
 ### Modifying the execution policy
