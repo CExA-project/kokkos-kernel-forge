@@ -1,5 +1,5 @@
-add_library(krepe_plugin_dep INTERFACE)
-install(TARGETS krepe_plugin_dep EXPORT krepeTargets)
+add_library(krepe_compiler_plugin INTERFACE)
+install(TARGETS krepe_compiler_plugin EXPORT krepeTargets)
 set(KREPE_HAS_COMPILER_PLUGINS FALSE PARENT_SCOPE)
 
 if(NOT KREPE_ENABLE_COMPILER_PLUGINS)
@@ -16,6 +16,28 @@ if(Kokkos_ENABLE_CUDA)
   unset(KREPE_CXX_COMPILER_BUILDS_CUDA)
 endif()
 
+# Since We cannot create a direct depency to the plugin using
+# target_link_libraries, we crate a custom command which has the plugin as a
+# dependency and creates an empty header that gets included in every target
+# which should depend on the plugin. This The header will be regenerated if the
+# plugin needs to be rebuilt, which will lead to a recompilation of the
+# executables.
+macro(add_plugin_dependency TARGET PLUGIN_NAME)
+  set(DUMMY_PLUGIN_HEADER "${CMAKE_BINARY_DIR}/dummy.h")
+  add_custom_command(OUTPUT "${DUMMY_PLUGIN_HEADER}" COMMAND cmake -E touch "${DUMMY_PLUGIN_HEADER}" DEPENDS ${TARGET})
+  add_custom_target(dummy "" DEPENDS "${DUMMY_PLUGIN_HEADER}")
+  set(NVCC_EXTRA_FLAG "$<$<BOOL:${KREPE_USES_NVCC_WRAPPER}>:-Xcompiler;>")
+  target_compile_options(
+    krepe_compiler_plugin
+    INTERFACE $<BUILD_INTERFACE:${NVCC_EXTRA_FLAG}-fplugin=$<TARGET_FILE:${TARGET}>;-include;${DUMMY_PLUGIN_HEADER}>
+              $<INSTALL_INTERFACE:${NVCC_EXTRA_FLAG}-fplugin=$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBDIR}/${PLUGIN_NAME}>
+  )
+  add_dependencies(krepe_compiler_plugin dummy)
+endmacro()
+
+#-----------------------------------------------------
+# GCC plugin
+#-----------------------------------------------------
 if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
   if(KREPE_CXX_COMPILER_IS_NVCC)
     # NOTE: This should be modified if we ever need to call the host gcc with multiple flags
@@ -58,32 +80,54 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
 
   find_package(GMP REQUIRED)
 
-  add_library(krepe_gcc_plugin SHARED gcc.cpp)
+  add_library(krepe_gcc_plugin MODULE gcc.cpp)
   target_include_directories(krepe_gcc_plugin PRIVATE "${GCC_PLUGIN_HEADERS_DIR}")
   target_link_libraries(krepe_gcc_plugin PRIVATE GMP::GMP)
   target_compile_options(krepe_gcc_plugin PRIVATE "-fno-rtti")
   set_target_properties(krepe_gcc_plugin PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
-  # Since We cannot create a direct depency to the plugin using
-  # target_link_libraries, we crate a custom command depending on the
-  # plugin which creates an empty header that gets included in every
-  # target which should depend on the plugin. This The header will be
-  # regenerated if the plugin needs to be rebuilt, which will lead to a
-  # recompilation of the executables.
+  add_plugin_dependency(krepe_gcc_plugin libkrepe_gcc_plugin.so)
 
-  set(DUMMY_PLUGIN_HEADER "${CMAKE_BINARY_DIR}/dummy.h")
-  add_custom_command(
-    OUTPUT "${DUMMY_PLUGIN_HEADER}" COMMAND cmake -E touch "${DUMMY_PLUGIN_HEADER}" DEPENDS krepe_gcc_plugin
-  )
-  add_custom_target(dummy "" DEPENDS "${DUMMY_PLUGIN_HEADER}")
-  set(NVCC_EXTRA_FLAG "$<$<BOOL:${KREPE_USES_NVCC_WRAPPER}>:-Xcompiler;>")
-  target_compile_options(
-    krepe_plugin_dep
-    INTERFACE
-      $<BUILD_INTERFACE:${NVCC_EXTRA_FLAG}-fplugin=$<TARGET_FILE:krepe_gcc_plugin>;-include;${DUMMY_PLUGIN_HEADER}>
-      $<INSTALL_INTERFACE:${NVCC_EXTRA_FLAG}-fplugin=$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBDIR}/libkrepe_gcc_plugin.so>
-  )
-  add_dependencies(krepe_plugin_dep dummy)
+  install(TARGETS krepe_gcc_plugin DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+endif()
 
-  install(TARGETS krepe_gcc_plugin)
+#-----------------------------------------------------
+# Clang plugin
+#-----------------------------------------------------
+if(CMAKE_CXX_COMPILER_ID STREQUAL Clang OR CMAKE_CXX_COMPILER_ID STREQUAL AppleClang OR CMAKE_CXX_COMPILER_ID STREQUAL
+                                                                                        CrayClang
+)
+  # The LLVM package may run try_compile with c files
+  enable_language(C)
+  find_package(LLVM QUIET)
+
+  if(NOT LLVM_FOUND)
+    message(WARNING "Failed to find the LLVM CMake package\nDisabling plugin support")
+    return()
+  endif()
+
+  include(AddLLVM)
+  if(NOT EXISTS "${LLVM_MAIN_INCLUDE_DIR}/clang/AST/AST.h")
+    message(
+      WARNING
+        "Found the LLVM CMake package, but the clang AST headers are not found. Make sure that the necessary packages are installed.\nDisabling plugin support"
+    )
+    return()
+  endif()
+
+  message(STATUS "Enabling the Clang plugin")
+  set(KREPE_HAS_COMPILER_PLUGINS TRUE PARENT_SCOPE)
+
+  add_library(krepe_clang_plugin MODULE clang.cpp)
+  target_include_directories(krepe_clang_plugin PRIVATE "${LLVM_INCLUDE_DIRS}")
+  target_link_directories(krepe_clang_plugin PRIVATE "${LLVM_LIBRARY_DIRS}")
+  target_link_libraries(krepe_clang_plugin PRIVATE "${LLVM_LIBRARIES}")
+  llvm_update_compile_flags(krepe_clang_plugin)
+  string(REGEX REPLACE " " ";" LLVM_DEFS "${LLVM_DEFINITIONS}")
+  target_compile_definitions(krepe_clang_plugin PRIVATE "${LLVM_DEFS}")
+  set_target_properties(krepe_clang_plugin PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+
+  add_plugin_dependency(krepe_clang_plugin libkrepe_clang_plugin.so)
+
+  install(TARGETS krepe_clang_plugin DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif()

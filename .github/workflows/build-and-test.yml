@@ -128,6 +128,14 @@ jobs:
           gcc-$(gcc -dumpversion)-plugin-dev \
           libgmp-dev
 
+    - name: Install Clang plugin system dependencies
+      if: ${{ matrix.krepe_enable_plugins == 'ON' && matrix.configuration.cxx == 'clang++' }}
+      run: |
+        sudo apt-get install -y --no-install-recommends \
+          llvm-dev \
+          libclang-dev
+        echo "LLVM_ROOT=/usr/lib/llvm-$(clang -dumpversion | sed -e 's/\([0-9]\+\)\..*/\1/')" >> $GITHUB_ENV
+
     - name: Compute Kokkos cache fingerprint
       run: |
         {
