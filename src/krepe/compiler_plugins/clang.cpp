@@ -176,13 +176,8 @@ class RegisterFunctorViewsConsumer : public ASTConsumer {
       abort();
     }
 
-    ParmVarDecl* functor        = params[0];
-    const QualType functor_type = functor->getType()
-                                      .getNonReferenceType()
-                                      .getUnqualifiedType()
-                                      .getCanonicalType();
-
-    CXXRecordDecl* functor_struct = functor_type->getAsCXXRecordDecl();
+    ParmVarDecl* functor          = params[0];
+    CXXRecordDecl* functor_struct = get_struct_decl(functor->getType());
     if (!functor_struct) {
       llvm::errs()
           << "The argument to krepe::replay_functor should be a record type\n";
